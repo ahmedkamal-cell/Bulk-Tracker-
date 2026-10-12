@@ -115,6 +115,13 @@ select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border
 .bi{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}
 .bi .n{flex:1}.bi small{color:var(--muted)}
 .btot{display:flex;justify-content:space-between;font-size:14px;font-weight:600;padding:8px 0 10px;color:var(--cal)}
+.forlbl{font-size:13px;color:var(--pro);margin-bottom:10px;font-weight:600}
+.other{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
+.meal .ft>span{display:flex;gap:6px;align-items:center}
+.meal.alt{border-right:4px solid var(--pro)}
+.altlbl{font-size:12px;color:var(--pro);margin-bottom:4px}
+.more{display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--muted);padding:6px 0 10px}
+.more div{display:flex;gap:6px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -177,6 +184,7 @@ select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border
 
 <div id="addSheet"><div class="sheet-bg" data-close></div>
  <div class="sheet" role="dialog" aria-label="سجّل أكل">
+  <p class="forlbl" id="addFor"></p>
   <div class="mtabs"><button class="on" data-mode="one">أكلة واحدة</button><button data-mode="build">وجبة من مكوناتها</button></div>
   <div id="buildBox" hidden>
    <input id="bName" placeholder="اسم الوجبة (مثلاً: مكرونة بشاميل)">
@@ -185,6 +193,8 @@ select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border
   </div>
   <input id="search" placeholder="دوّر: فراخ، رز، كشري..." autocomplete="off">
   <div class="foods" id="foodList"></div>
+  <div id="moreBox"></div>
+  <div class="foods" id="onlineList"></div>
   <div id="amtBox" hidden>
    <div class="amt"><input id="amt" type="number" inputmode="decimal" aria-label="الكمية"><select id="unit" aria-label="الوحدة"></select></div>
    <div class="calc" id="amtCalc"></div>
@@ -270,8 +280,8 @@ const item=(cat,id)=>{const x=CAT[cat].i[id];return{n:x[0],c:x[1],p:x[2]}};
 const compId=(mi,ci,def)=>D.sw[mi+'-'+ci]||def;
 const save=()=>sset(dkey(day),D);
 
-async function loadDay(){D=await sget(dkey(day),{sw:{},eat:{},ex:[]});renderToday()}
-function mealTotals(mi){return plan()[mi][2].reduce((a,[cat,def],ci)=>{const x=item(cat,compId(mi,ci,def));return{c:a.c+x.c,p:a.p+x.p}},{c:0,p:0})}
+async function loadDay(){D=await sget(dkey(day),{sw:{},eat:{},ex:[]});D.alt=D.alt||{};renderToday()}
+function mealTotals(mi){const al=D.alt[mi];if(al&&al.length)return al.reduce((a,x)=>({c:a.c+x.c,p:a.p+x.p}),{c:0,p:0});return plan()[mi][2].reduce((a,[cat,def],ci)=>{const x=item(cat,compId(mi,ci,def));return{c:a.c+x.c,p:a.p+x.p}},{c:0,p:0})}
 function renderToday(){
  const today=new Date().toDateString()===day.toDateString();
  $('date').innerHTML=(today?'النهارده':day.toLocaleDateString('ar-EG',{weekday:'long'}))+'<small>'+day.toLocaleDateString('ar-EG',{weekday:today?'long':undefined,day:'numeric',month:'long'})+'</small>';
@@ -290,10 +300,14 @@ function renderToday(){
  else{gd.className='gymday rest';gd.innerHTML='<div><b>يوم راحة</b><small>الأكل مهم النهارده زي أيام التمرين</small></div>';gd.onclick=null}
  const k=steps();$('planNote').innerHTML=k<0?`<div class="note">الهدف اتقلل ${ar(-k*200)} سعر عشان وزنك بيزيد أسرع من المطلوب. قلّل من النشويات حوالي ${ar(-k*0.5)} كوب رز أو مكرونة في اليوم.</div>`:'';
  $('meals').innerHTML=plan().map((m,mi)=>{
-  const t=mealTotals(mi);
-  return `<div class="meal ${D.eat[mi]?'done':''}"><div class="hd"><b>${m[1]}</b><span>${m[0]}</span></div>`+
+  const t=mealTotals(mi),al=D.alt[mi];
+  const hd=`<div class="hd"><b>${m[1]}</b><span>${m[0]}</span></div>`;
+  if(al&&al.length) return `<div class="meal alt">${hd}<div class="altlbl">كلت بدل البرنامج:</div>`+
+   al.map((x,k)=>`<div class="comp"><div class="n">${x.n}<small>${x.q} · ${ar(Math.round(x.c))} سعر</small></div><button class="del" data-ad="${mi}-${k}" aria-label="امسح">×</button></div>`).join('')+
+   `<div class="ft"><span class="k">${ar(Math.round(t.c))} سعر · ${ar(r1(t.p))} جم بروتين</span><span><button class="other" data-other="${mi}">+ صنف</button> <button class="other" data-reset="${mi}">رجّع للبرنامج</button></span></div></div>`;
+  return `<div class="meal ${D.eat[mi]?'done':''}">${hd}`+
    m[2].map(([cat,def],ci)=>{const x=item(cat,compId(mi,ci,def));return `<div class="comp"><div class="n">${x.n}<small>${ar(x.c)} سعر</small></div><button class="swap" data-sw="${mi}-${ci}">بدّل</button></div>`}).join('')+
-   `<div class="ft"><span class="k">${ar(t.c)} سعر · ${ar(t.p)} جم بروتين</span><button class="ate" data-eat="${mi}">${D.eat[mi]?'كلتها ✓':'كلتها'}</button></div></div>`;
+   `<div class="ft"><span class="k">${ar(t.c)} سعر · ${ar(t.p)} جم بروتين</span><span><button class="other" data-other="${mi}">كلت حاجة تانية</button> <button class="ate" data-eat="${mi}">${D.eat[mi]?'كلتها ✓':'كلتها'}</button></span></div></div>`;
  }).join('');
  $('extras').innerHTML=D.ex.length?D.ex.map((e,i)=>`<div class="extra"><div class="n">${e.n}<small>${e.q} · ${ar(e.p)} جم بروتين</small></div><div class="k">${ar(e.c)}</div><button class="del" data-del="${i}" aria-label="امسح">×</button></div>`).join(''):'';
 }
@@ -301,6 +315,9 @@ $('meals').onclick=async e=>{
  const t=e.target;
  if(t.dataset.eat!==undefined){const mi=t.dataset.eat;D.eat[mi]=!D.eat[mi];await save();renderToday()}
  if(t.dataset.sw){const [mi,ci]=t.dataset.sw.split('-').map(Number);openSwap(mi,ci)}
+ if(t.dataset.other!==undefined)openAddFor(+t.dataset.other);
+ if(t.dataset.reset!==undefined){const mi=+t.dataset.reset;delete D.alt[mi];D.eat[mi]=false;await save();renderToday()}
+ if(t.dataset.ad){const [mi,k]=t.dataset.ad.split('-').map(Number);D.alt[mi].splice(k,1);if(!D.alt[mi].length){delete D.alt[mi];D.eat[mi]=false}await save();renderToday()}
 };
 $('extras').onclick=async e=>{const i=e.target.dataset.del;if(i===undefined)return;D.ex.splice(+i,1);await save();renderToday()};
 $('prev').onclick=()=>{day.setDate(day.getDate()-1);loadDay()};
@@ -316,28 +333,54 @@ $('swapList').onclick=async e=>{const b=e.target.closest('.opt');if(!b)return;co
 
 // extras sheet
 let mode='one',sel=null,build=[];
-const lib=()=>[...custom.map(f=>({n:f.n,kind:'c',units:[{u:f.u||'حصة',c:f.c,p:f.p}]})),...LIB];
+const custUnits=f=>f.per100?[{u:'جرام',c:f.c/100,p:f.p/100,g:1},...(f.sq?[{u:'حصة/عبوة',c:f.c*f.sq/100,p:f.p*f.sq/100,g:f.sq}]:[])]:[{u:f.u||'حصة',c:f.c,p:f.p}];
+const lib=()=>[...custom.map(f=>({n:f.n,kind:'c',units:custUnits(f)})),...LIB];
 function renderFoods(){
  const nz=t=>t.replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').trim();
  const q=nz($('search').value),rank=f=>{const n=nz(f.n);return (n.startsWith(q)?0:1)+(mode==='build'?(f.kind==='i'?0:2):(f.kind==='c'?0:0))};
  const l=lib().filter(f=>!q||nz(f.n).includes(q)).map((f,i)=>({f,i,r:rank(f)})).sort((a,b)=>a.r-b.r||a.i-b.i).map(x=>x.f).slice(0,60);
- $('foodList').innerHTML=l.map((f,i)=>{const u=f.kind==='i'?f.units[0]:f.units[0];const lbl=f.kind==='i'?`${ar(Math.round(u.c*100))} سعر / 100 جم`:`${ar(Math.round(u.c))} سعر / ${u.u}`;
-  return `<button class="opt ${sel&&sel.n===f.n&&sel.units[0].u===f.units[0].u?'sel':''}" data-i="${i}"><span>${f.n}${f.kind==='c'?' <small>(بتاعتك)</small>':''}</span><small>${lbl}</small></button>`}).join('')||'<p class="hint" style="margin:8px 0">مش لاقيها؟ جرّب "وجبة من مكوناتها".</p>';
+ $('foodList').innerHTML=l.map((f,i)=>{const u=f.kind==='i'?f.units[0]:f.units[0];const lbl=u.u==='جرام'?`${ar(Math.round(u.c*100))} سعر / 100 جم`:`${ar(Math.round(u.c))} سعر / ${u.u}`;
+  return `<button class="opt ${sel&&sel.n===f.n&&sel.units[0].u===f.units[0].u?'sel':''}" data-i="${i}"><span>${f.n}${f.kind==='c'?' <small>(بتاعتك)</small>':''}</span><small>${lbl}</small></button>`}).join('')||'<p class="hint" style="margin:8px 0">مش موجودة في القايمة.</p>';
  $('foodList')._list=l;
+ const raw=$('search').value.trim();
+ $('moreBox').innerHTML=raw.length>=2?`<div class="more"><span>مش لاقي "${raw.replace(/[<>"]/g,'')}"؟</span><div><button class="other" id="goOnline">دوّر أونلاين</button>${mode==='one'?' <button class="other" id="goBuild">اعملها من مكوناتها</button>':''}</div></div>`:'';
+ if(!raw)$('onlineList').innerHTML='';
 }
-$('foodList').onclick=e=>{const b=e.target.closest('.opt');if(!b)return;sel=$('foodList')._list[+b.dataset.i];
+let olist=[];
+async function searchOnline(q){
+ const box=$('onlineList');box.innerHTML='<p class="hint" style="margin:8px 0">بدوّر... ممكن ياخد كام ثانية</p>';
+ try{
+  const r=await fetch('https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&json=1&page_size=24&fields=product_name,product_name_ar,brands,nutriments,serving_quantity&search_terms='+encodeURIComponent(q));
+  const j=await r.json();
+  olist=(j.products||[]).map(p=>{const nu=p.nutriments||{},c=+nu['energy-kcal_100g'],pr=+(nu.proteins_100g||0),sq=+p.serving_quantity||0;
+   const nm=(p.product_name_ar||p.product_name||'').trim();if(!nm||!(c>0))return null;
+   const n=nm+(p.brands?' - '+p.brands.split(',')[0].trim():'');
+   return{n,kind:'o',c100:c,p100:pr,sq,units:[{u:'جرام',c:c/100,p:pr/100,g:1},...(sq>0?[{u:'حصة/عبوة',c:c*sq/100,p:pr*sq/100,g:sq}]:[])]}}).filter(Boolean);
+  box.innerHTML=olist.length?'<p class="hint" style="margin:8px 0 4px">نتايج أونلاين (أغلبها منتجات معبّأة):</p>'+olist.map((f,i)=>`<button class="opt ${sel===f?'sel':''}" data-o="${i}"><span>${f.n}</span><small>${ar(Math.round(f.c100))} سعر / 100 جم</small></button>`).join('')
+   :'<p class="hint" style="margin:8px 0">مالقيتش نتايج أونلاين. لو أكلة بيتي، اعملها من مكوناتها.</p>';
+ }catch(e){box.innerHTML='<p class="hint" style="margin:8px 0">مش قادر أوصل للنت دلوقتي. جرّب تاني أو اعملها من مكوناتها.</p>'}
+}
+$('moreBox').onclick=e=>{
+ if(e.target.id==='goOnline')searchOnline($('search').value.trim());
+ if(e.target.id==='goBuild'){const n=$('search').value.trim();document.querySelector('[data-mode=build]').click();$('bName').value=n;$('search').focus()}};
+$('onlineList').onclick=e=>{const b=e.target.closest('.opt');if(!b)return;pick(olist[+b.dataset.o]);
+ $('onlineList').querySelectorAll('.opt').forEach(x=>x.classList.toggle('sel',x===b))};
+async function rememberOnline(f){if(f.kind!=='o')return;custom=[{n:f.n,per100:true,c:f.c100,p:f.p100,sq:f.sq},...custom.filter(x=>x.n!==f.n)];await sset('customFoods',custom)}
+$('foodList').onclick=e=>{const b=e.target.closest('.opt');if(!b)return;pick($('foodList')._list[+b.dataset.i]);renderFoods()};
+function pick(f){sel=f;
  const us=sel.units,def=us.length>1?1:0;
  $('unit').innerHTML=us.map((u,k)=>`<option value="${k}" ${k===def?'selected':''}>${u.u}${u.g>1?` (${ar(u.g)} جم)`:''}</option>`).join('');
- $('amt').value=us[def].u==='جرام'?100:1;$('amtBox').hidden=false;renderFoods();updAmt();$('amt').focus()};
+ $('amt').value=us[def].u==='جرام'?100:1;$('amtBox').hidden=false;updAmt();$('amt').focus()}
 function cur(){if(!sel)return null;const u=sel.units[+$('unit').value],a=parseFloat($('amt').value)||0;return{n:sel.n,q:`${ar(a)} ${u.u}`,c:u.c*a,p:u.p*a,a}}
 function updAmt(){const x=cur();$('amtCalc').textContent=x?`= ${ar(Math.round(x.c))} سعر · ${ar(r1(x.p))} جم بروتين`:'';
  $('addBtn').disabled=!x||!x.a;$('addBtn').textContent=mode==='one'?'سجّل':'ضيف للوجبة'}
 $('amt').oninput=updAmt;
 $('unit').onchange=()=>{const u=sel.units[+$('unit').value];$('amt').value=u.u==='جرام'?100:1;updAmt()};
-$('search').oninput=renderFoods;
+$('search').oninput=()=>{$('onlineList').innerHTML='';renderFoods()};
 function resetPick(){sel=null;$('amtBox').hidden=true;$('search').value='';renderFoods();updAmt()}
 $('addBtn').onclick=async()=>{const x=cur();if(!x||!x.a)return;
- if(mode==='one'){D.ex.push({n:x.n,q:x.q,c:x.c,p:x.p});await save();close('addSheet');renderToday()}
+ await rememberOnline(sel);
+ if(mode==='one'){await logItem({n:x.n,q:x.q,c:x.c,p:x.p})}
  else{build.push(x);resetPick();renderBuild();$('search').focus()}};
 function renderBuild(){
  const tc=build.reduce((s,x)=>s+x.c,0),tp=build.reduce((s,x)=>s+x.p,0),sv=Math.max(1,parseFloat($('bServ').value)||1);
@@ -351,16 +394,22 @@ $('bServ').oninput=renderBuild;
 $('saveBuild').onclick=async()=>{const n=$('bName').value.trim();if(!n){$('bName').focus();return}
  const sv=Math.max(1,parseFloat($('bServ').value)||1),c=Math.round(build.reduce((s,x)=>s+x.c,0)/sv),p=r1(build.reduce((s,x)=>s+x.p,0)/sv);
  custom=[{n,u:'حصة',c,p},...custom.filter(x=>x.n!==n)];await sset('customFoods',custom);
- D.ex.push({n,q:'1 حصة',c,p});await save();close('addSheet');renderToday()};
+ await logItem({n,q:'1 حصة',c,p})};
 $('customToggle').onclick=()=>{const b=$('customBox');b.hidden=!b.hidden;if(!b.hidden)$('cName').focus()};
 $('saveCustom').onclick=async()=>{const n=$('cName').value.trim(),c=+$('cCal').value,p=+$('cPro').value||0;if(!n||!c){$('cName').focus();return}
  custom=[{n,u:'حصة',c,p},...custom.filter(x=>x.n!==n)];await sset('customFoods',custom);
- D.ex.push({n,q:'1 حصة',c,p});await save();close('addSheet');renderToday()};
+ await logItem({n,q:'1 حصة',c,p})};
 document.querySelector('.mtabs').onclick=e=>{const m=e.target.dataset.mode;if(!m)return;mode=m;
  document.querySelectorAll('.mtabs button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
  $('buildBox').hidden=m!=='build';if(m==='build'){$('buildFoot').hidden=!build.length}else $('buildFoot').hidden=true;
  resetPick()};
-$('openAdd').onclick=()=>{mode='one';build=[];$('bName').value='';$('bServ').value=1;['cName','cCal','cPro'].forEach(i=>$(i).value='');$('customBox').hidden=true;
+let addFor=null;
+async function logItem(x){
+ if(addFor===null)D.ex.push(x);
+ else{(D.alt[addFor]=D.alt[addFor]||[]).push(x);D.eat[addFor]=true}
+ await save();close('addSheet');renderToday()}
+function openAddFor(mi){$('openAdd').onclick();addFor=mi;$('addFor').textContent='بتسجّل في: '+plan()[mi][1]+' (بدل أكل البرنامج)'}
+$('openAdd').onclick=()=>{addFor=null;$('addFor').textContent='بتسجّل في: أكل زيادة';mode='one';build=[];$('bName').value='';$('bServ').value=1;['cName','cCal','cPro'].forEach(i=>$(i).value='');$('customBox').hidden=true;
  document.querySelectorAll('.mtabs button').forEach(b=>b.classList.toggle('on',b.dataset.mode==='one'));$('buildBox').hidden=true;$('buildFoot').hidden=true;
  resetPick();renderBuild();$('buildFoot').hidden=true;open('addSheet')};
 
