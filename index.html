@@ -106,6 +106,15 @@ body{padding:calc(env(safe-area-inset-top) + 14px) 16px calc(96px + env(safe-are
 .row2{display:flex;justify-content:space-between;align-items:center;font-size:14px;padding:8px 0;border-bottom:1px solid var(--line)}
 .row2 small{color:var(--muted)}
 .note{background:var(--panel);border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:10px;border-right:4px solid var(--over)}
+.mtabs{display:flex;gap:6px;margin-bottom:12px}
+.mtabs button{flex:1;padding:9px 0;border-radius:10px;background:var(--bg);font-size:13px}
+.mtabs button.on{background:var(--cal);color:#13212C;font-weight:600}
+.amt{display:flex;gap:8px}.amt input{flex:1}
+select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--chalk);margin-bottom:10px;min-width:120px}
+.calc{font-size:14px;color:var(--cal);margin:-2px 0 12px;font-weight:600}
+.bi{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}
+.bi .n{flex:1}.bi small{color:var(--muted)}
+.btot{display:flex;justify-content:space-between;font-size:14px;font-weight:600;padding:8px 0 10px;color:var(--cal)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -168,17 +177,30 @@ body{padding:calc(env(safe-area-inset-top) + 14px) 16px calc(96px + env(safe-are
 
 <div id="addSheet"><div class="sheet-bg" data-close></div>
  <div class="sheet" role="dialog" aria-label="سجّل أكل">
-  <h3>كلت إيه؟</h3>
-  <input id="search" placeholder="دوّر: كشري، شاورما، موز..." autocomplete="off">
+  <div class="mtabs"><button class="on" data-mode="one">أكلة واحدة</button><button data-mode="build">وجبة من مكوناتها</button></div>
+  <div id="buildBox" hidden>
+   <input id="bName" placeholder="اسم الوجبة (مثلاً: مكرونة بشاميل)">
+   <div id="bItems"></div>
+   <p class="hint" id="bHint">دوّر على كل مكوّن، اكتب الكمية، واضغط "ضيف للوجبة".</p>
+  </div>
+  <input id="search" placeholder="دوّر: فراخ، رز، كشري..." autocomplete="off">
   <div class="foods" id="foodList"></div>
-  <div class="qty"><button id="minus" aria-label="أقل">−</button><div class="v" id="qtyTxt"></div><button id="plus" aria-label="أكتر">+</button></div>
-  <button class="link" id="customToggle">الأكلة مش موجودة؟ ضيفها</button>
-  <div id="customBox" hidden>
-   <input id="cName" placeholder="اسم الأكلة (مثلاً: ساندوتش كبدة)">
-   <div class="grid2"><input id="cCal" type="number" inputmode="numeric" placeholder="سعرات"><input id="cPro" type="number" inputmode="numeric" placeholder="بروتين (جم)"></div>
-   <p class="hint">هتتحفظ في القايمة عشان تستخدمها تاني.</p>
+  <div id="amtBox" hidden>
+   <div class="amt"><input id="amt" type="number" inputmode="decimal" aria-label="الكمية"><select id="unit" aria-label="الوحدة"></select></div>
+   <div class="calc" id="amtCalc"></div>
   </div>
   <button class="primary" id="addBtn" disabled>سجّل</button>
+  <div id="buildFoot" hidden>
+   <div class="amt" style="margin-top:14px"><label style="flex:1;margin:0;align-self:center">الطبق ده كام حصة؟</label><input id="bServ" type="number" inputmode="numeric" value="1" style="width:90px"></div>
+   <div class="calc" id="bPer"></div>
+   <button class="primary" id="saveBuild">سجّل حصة واحفظ الوجبة</button>
+  </div>
+  <button class="link" id="customToggle" style="margin-top:12px">أعرف السعرات بنفسي</button>
+  <div id="customBox" hidden>
+   <input id="cName" placeholder="اسم الأكلة">
+   <div class="grid2"><input id="cCal" type="number" inputmode="numeric" placeholder="سعرات"><input id="cPro" type="number" inputmode="numeric" placeholder="بروتين (جم)"></div>
+   <button class="primary" id="saveCustom">سجّل واحفظ</button>
+  </div>
  </div></div>
 
 <div id="setSheet"><div class="sheet-bg" data-close></div>
@@ -214,10 +236,27 @@ const GYM={
 };
 // getDay: 0 Sun ... 6 Sat
 const DAYMAP={0:['eve','u1'],1:['rest',null],2:['eve','l1'],3:['wed','u2'],4:['thu','l2'],5:['rest',null],6:['rest',null]};
-const FOODS=[['كشري','طبق وسط',700,20],['شاورما فراخ','ساندوتش',450,25],['برجر','ساندوتش',550,25],['فول بالزيت','طبق',340,14],['طعمية','قرص',60,2],['عيش بلدي','رغيف',250,9],['عيش فينو','رغيف',150,5],['رز','كوب',205,4],['مكرونة','كوب',220,8],['بطاطس محمرة','100 جم',310,3],['محشي','طبق 300 جم',400,8],['ملوخية','طبق',150,4],['صدور فراخ','100 جم',165,31],['لحمة مشوية','100 جم',250,26],['كفتة','100 جم',280,20],['فراخ بانيه','100 جم',260,22],['تونة مصفاة','علبة',140,30],['بيض أومليت','بيضة',90,6],['جبنة قريش','100 جم',100,13],['جبنة رومي','30 جم',115,8],['زبادي','علبة',105,6],['زبادي يوناني','علبة',100,15],['لبن كامل','كوباية',155,8],['موز','موزة',105,1],['تفاح','تفاحة',95,0],['تمر','3 حبات',70,1],['مكسرات','30 جم',175,5],['زبدة فول سوداني','معلقة',95,4],['واي بروتين','سكوب',120,24],['شيك التضخيم','كوباية',545,20],['بسبوسة','قطعة',300,4],['شوكولاتة','قطعة 40 جم',210,3],['بيبسي','كانز',140,0]].map(([n,u,c,p])=>({n,u,c,p}));
-const QTYS=[0.5,1,1.5,2,2.5,3,4];
+// أكلات جاهزة: [الاسم، الوحدة، سعرات، بروتين]
+const DISHES=[['كشري','طبق وسط',700,20],['كشري','طبق كبير',950,27],['شاورما فراخ','ساندوتش',450,25],['شاورما لحمة','ساندوتش',500,25],['فتة شاورما','طبق',900,40],['برجر','ساندوتش',550,25],['حواوشي','رغيف',650,28],['بيتزا','قطعة',285,12],['فول بالزيت','طبق',340,14],['ساندوتش فول','ساندوتش',300,12],['ساندوتش طعمية','ساندوتش',350,10],['ساندوتش كبدة','ساندوتش',400,22],['ساندوتش سجق','ساندوتش',450,15],['محشي','طبق 300 جم',420,9],['ملوخية','طبق',150,8],['مسقعة','طبق',330,5],['بامية باللحمة','طبق',350,20],['فطير مشلتت','ربع فطيرة',450,8],['شيك التضخيم','كوباية كبيرة',545,20],['بسبوسة','قطعة',300,4],['كنافة','قطعة',400,6],['أرز باللبن','علبة',200,6],['شوكولاتة','قطعة 40 جم',210,3],['بيبسي','كانز',140,0],['عصير برتقال','كوباية',110,2]];
+// مكونات لكل 100 جم: [الاسم، سعرات، بروتين، وحدة، وزن الوحدة بالجرام]
+const ING=[
+['صدور فراخ مشوية',165,31,'صدر وسط',200],['صدور فراخ نية',120,23],['وراك فراخ مشوية',210,26,'ورك',150],['فراخ بانيه',260,22,'قطعة',100],['فراخ مشوية بالجلد',240,25,'ربع فرخة',250],
+['لحمة بقري مشوية',250,26],['لحمة بقري نية',200,20],['لحمة مفرومة مطبوخة',270,25],['كفتة مشوية',280,20,'صباع',40],['كبدة إسكندراني',230,24],['سجق',300,14],['لانشون',250,12,'شريحة',15],['بسطرمة',250,28,'شريحة',10],
+['سمك بلطي مشوي',130,26,'سمكة وسط',250],['سمك مقلي',230,22],['جمبري',100,24],['سالمون',208,20],['تونة مصفاة (مية)',116,26,'علبة',120],['تونة بالزيت',200,29,'علبة',120],['سردين معلب',210,25,'علبة',90],
+['بيض (مسلوق أو نيء)',155,13,'بيضة',50],['بيض أومليت أو مقلي',185,12,'بيضة',55],['بياض بيض',52,11,'بياض',33],
+['لبن كامل الدسم',62,3.2,'كوباية',250],['لبن خالي الدسم',35,3.4,'كوباية',250],['زبادي',61,3.5,'علبة',170],['زبادي يوناني',97,9,'علبة',170],['جبنة قريش',90,13],['جبنة بيضا (دمياطي)',260,15],['جبنة رومي',380,26,'شريحة',15],['جبنة شيدر',400,25,'شريحة',20],['جبنة موتزاريلا',280,28],['جبنة مثلثات',240,10,'مثلث',17],['جبنة فيتا',265,14],['لبنة',170,7],['واي بروتين',400,80,'سكوب',30],
+['رز أبيض مطبوخ',130,2.7,'كوب',160],['مكرونة مطبوخة',158,5.8,'كوب',140],['عيش بلدي',250,9,'رغيف',100],['عيش فينو',290,9,'رغيف',50],['عيش شامي',275,9,'رغيف',60],['توست أبيض',265,9,'شريحة',30],['توست بني',250,12,'شريحة',30],['شوفان',380,13,'معلقة كبيرة',10],['كورن فليكس',375,7,'كوب',30],['بطاطس مسلوقة أو فرن',87,2,'حباية وسط',170],['بطاطس محمرة',310,3.4],['بطاطا',90,2,'حباية',200],['برغل مطبوخ',83,3],['فريك مطبوخ',130,4.5],
+['فول مدمس سادة',110,7.6],['عدس مطبوخ',116,9],['شوربة عدس',75,4.5,'طبق',300],['حمص مطبوخ',164,9],['فاصوليا بيضا مطبوخة',140,9],['فاصوليا خضرا',35,2],['بسلة',81,5],['طعمية',330,13,'قرص',20],
+['موز',89,1.1,'موزة',120],['تفاح',52,0.3,'تفاحة',180],['برتقال',47,0.9,'برتقانة',180],['جوافة',68,2.6,'حباية',100],['مانجا',60,0.8,'حباية',300],['فراولة',32,0.7],['عنب',69,0.7],['بطيخ',30,0.6],['تمر',280,2.5,'تمرة',8],['زبيب',300,3],
+['خيار',15,0.7,'خيارة',100],['طماطم',18,0.9,'طماطماية',120],['سلطة خضرا',20,1,'طبق',200],['جزر',41,0.9],
+['زيت (أي نوع)',884,0,'معلقة كبيرة',13],['زبدة',717,1,'معلقة كبيرة',14],['سمنة',900,0,'معلقة كبيرة',13],['زبدة فول سوداني',590,25,'معلقة كبيرة',16],['فول سوداني',570,26],['لوز',580,21],['كاجو',553,18],['عين جمل',654,15],['طحينة',595,17,'معلقة كبيرة',15],['عسل',304,0.3,'معلقة كبيرة',21],['سكر',387,0,'معلقة صغيرة',5],['مربى',250,0.4,'معلقة كبيرة',20],['نوتيلا',540,6,'معلقة كبيرة',19],['مايونيز',680,1,'معلقة كبيرة',14],['كاتشب',100,1,'معلقة كبيرة',17],
+['بسكويت',480,6],['كيك',400,5]];
+const r1=n=>Math.round(n*10)/10;
+const LIB=[...DISHES.map(([n,u,c,p])=>({n,kind:'d',units:[{u,c,p}]})),
+ ...ING.map(([n,c,p,u,g])=>({n,kind:'i',units:[{u:'جرام',c:c/100,p:p/100,g:1},...(u?[{u,c:c*g/100,p:p*g/100,g}]:[])]}))];
 
-let S={cal:2800,pro:145},custom=[],weights={},bw=[],day=new Date(),D=null,gymSel='u1',swapCtx=null,sel=null,qi=1;
+
+let S={cal:2800,pro:145},custom=[],weights={},bw=[],day=new Date(),D=null,gymSel='u1',swapCtx=null;
 const $=id=>document.getElementById(id);
 const ar=n=>(Math.round(n*10)/10).toLocaleString('ar-EG');
 const dkey=d=>{const z=new Date(d.getTime()-d.getTimezoneOffset()*6e4);return 'day:'+z.toISOString().slice(0,10)};
@@ -276,20 +315,54 @@ function openSwap(mi,ci){
 $('swapList').onclick=async e=>{const b=e.target.closest('.opt');if(!b)return;const [mi,ci]=swapCtx;D.sw[mi+'-'+ci]=b.dataset.id;await save();close('swapSheet');renderToday()};
 
 // extras sheet
-const allFoods=()=>[...custom,...FOODS];
-function renderFoods(){const q=$('search').value.trim(),l=allFoods().filter(f=>!q||f.n.includes(q));
- $('foodList').innerHTML=l.map(f=>`<button class="opt ${sel===f?'sel':''}" data-n="${f.n}"><span>${f.n} <small>(${f.u})</small></span><small>${ar(f.c)} سعر</small></button>`).join('')||'<p class="hint" style="margin:8px 0">مفيش نتايج. ضيفها تحت.</p>'}
-$('foodList').onclick=e=>{const b=e.target.closest('.opt');if(!b)return;sel=allFoods().find(f=>f.n===b.dataset.n);$('customBox').hidden=true;renderFoods();updQty()};
+let mode='one',sel=null,build=[];
+const lib=()=>[...custom.map(f=>({n:f.n,kind:'c',units:[{u:f.u||'حصة',c:f.c,p:f.p}]})),...LIB];
+function renderFoods(){
+ const nz=t=>t.replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').trim();
+ const q=nz($('search').value),rank=f=>{const n=nz(f.n);return (n.startsWith(q)?0:1)+(mode==='build'?(f.kind==='i'?0:2):(f.kind==='c'?0:0))};
+ const l=lib().filter(f=>!q||nz(f.n).includes(q)).map((f,i)=>({f,i,r:rank(f)})).sort((a,b)=>a.r-b.r||a.i-b.i).map(x=>x.f).slice(0,60);
+ $('foodList').innerHTML=l.map((f,i)=>{const u=f.kind==='i'?f.units[0]:f.units[0];const lbl=f.kind==='i'?`${ar(Math.round(u.c*100))} سعر / 100 جم`:`${ar(Math.round(u.c))} سعر / ${u.u}`;
+  return `<button class="opt ${sel&&sel.n===f.n&&sel.units[0].u===f.units[0].u?'sel':''}" data-i="${i}"><span>${f.n}${f.kind==='c'?' <small>(بتاعتك)</small>':''}</span><small>${lbl}</small></button>`}).join('')||'<p class="hint" style="margin:8px 0">مش لاقيها؟ جرّب "وجبة من مكوناتها".</p>';
+ $('foodList')._list=l;
+}
+$('foodList').onclick=e=>{const b=e.target.closest('.opt');if(!b)return;sel=$('foodList')._list[+b.dataset.i];
+ const us=sel.units,def=us.length>1?1:0;
+ $('unit').innerHTML=us.map((u,k)=>`<option value="${k}" ${k===def?'selected':''}>${u.u}${u.g>1?` (${ar(u.g)} جم)`:''}</option>`).join('');
+ $('amt').value=us[def].u==='جرام'?100:1;$('amtBox').hidden=false;renderFoods();updAmt();$('amt').focus()};
+function cur(){if(!sel)return null;const u=sel.units[+$('unit').value],a=parseFloat($('amt').value)||0;return{n:sel.n,q:`${ar(a)} ${u.u}`,c:u.c*a,p:u.p*a,a}}
+function updAmt(){const x=cur();$('amtCalc').textContent=x?`= ${ar(Math.round(x.c))} سعر · ${ar(r1(x.p))} جم بروتين`:'';
+ $('addBtn').disabled=!x||!x.a;$('addBtn').textContent=mode==='one'?'سجّل':'ضيف للوجبة'}
+$('amt').oninput=updAmt;
+$('unit').onchange=()=>{const u=sel.units[+$('unit').value];$('amt').value=u.u==='جرام'?100:1;updAmt()};
 $('search').oninput=renderFoods;
-function updQty(){const q=QTYS[qi];$('qtyTxt').textContent=sel?`${ar(q)} × ${sel.u} = ${ar(sel.c*q)} سعر`:`الكمية: ${ar(q)}`;$('addBtn').disabled=!sel&&$('customBox').hidden}
-$('minus').onclick=()=>{qi=Math.max(0,qi-1);updQty()};
-$('plus').onclick=()=>{qi=Math.min(QTYS.length-1,qi+1);updQty()};
-$('customToggle').onclick=()=>{const b=$('customBox');b.hidden=!b.hidden;if(!b.hidden){sel=null;renderFoods();$('cName').focus()}updQty()};
-$('addBtn').onclick=async()=>{const q=QTYS[qi];let f=sel;
- if(!$('customBox').hidden){const n=$('cName').value.trim(),c=+$('cCal').value,p=+$('cPro').value||0;if(!n||!c){$('cName').focus();return}
-  f={n,u:'حصة',c,p};custom=[f,...custom.filter(x=>x.n!==n)];await sset('customFoods',custom)}
- if(!f)return;D.ex.push({n:f.n,q:`${ar(q)} × ${f.u}`,c:f.c*q,p:f.p*q});await save();close('addSheet');renderToday()};
-$('openAdd').onclick=()=>{sel=null;qi=1;$('search').value='';$('customBox').hidden=true;['cName','cCal','cPro'].forEach(i=>$(i).value='');renderFoods();updQty();open('addSheet')};
+function resetPick(){sel=null;$('amtBox').hidden=true;$('search').value='';renderFoods();updAmt()}
+$('addBtn').onclick=async()=>{const x=cur();if(!x||!x.a)return;
+ if(mode==='one'){D.ex.push({n:x.n,q:x.q,c:x.c,p:x.p});await save();close('addSheet');renderToday()}
+ else{build.push(x);resetPick();renderBuild();$('search').focus()}};
+function renderBuild(){
+ const tc=build.reduce((s,x)=>s+x.c,0),tp=build.reduce((s,x)=>s+x.p,0),sv=Math.max(1,parseFloat($('bServ').value)||1);
+ $('bItems').innerHTML=build.map((x,i)=>`<div class="bi"><div class="n">${x.n} <small>${x.q}</small></div><small>${ar(Math.round(x.c))} سعر</small><button class="del" data-bi="${i}" aria-label="امسح">×</button></div>`).join('')+
+  (build.length?`<div class="btot"><span>الطبق كله</span><span>${ar(Math.round(tc))} سعر · ${ar(r1(tp))} جم</span></div>`:'');
+ $('bHint').hidden=build.length>0;$('buildFoot').hidden=!build.length;
+ $('bPer').textContent=`الحصة = ${ar(Math.round(tc/sv))} سعر · ${ar(r1(tp/sv))} جم بروتين`;
+}
+$('bItems').onclick=e=>{const i=e.target.dataset.bi;if(i===undefined)return;build.splice(+i,1);renderBuild()};
+$('bServ').oninput=renderBuild;
+$('saveBuild').onclick=async()=>{const n=$('bName').value.trim();if(!n){$('bName').focus();return}
+ const sv=Math.max(1,parseFloat($('bServ').value)||1),c=Math.round(build.reduce((s,x)=>s+x.c,0)/sv),p=r1(build.reduce((s,x)=>s+x.p,0)/sv);
+ custom=[{n,u:'حصة',c,p},...custom.filter(x=>x.n!==n)];await sset('customFoods',custom);
+ D.ex.push({n,q:'1 حصة',c,p});await save();close('addSheet');renderToday()};
+$('customToggle').onclick=()=>{const b=$('customBox');b.hidden=!b.hidden;if(!b.hidden)$('cName').focus()};
+$('saveCustom').onclick=async()=>{const n=$('cName').value.trim(),c=+$('cCal').value,p=+$('cPro').value||0;if(!n||!c){$('cName').focus();return}
+ custom=[{n,u:'حصة',c,p},...custom.filter(x=>x.n!==n)];await sset('customFoods',custom);
+ D.ex.push({n,q:'1 حصة',c,p});await save();close('addSheet');renderToday()};
+document.querySelector('.mtabs').onclick=e=>{const m=e.target.dataset.mode;if(!m)return;mode=m;
+ document.querySelectorAll('.mtabs button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
+ $('buildBox').hidden=m!=='build';if(m==='build'){$('buildFoot').hidden=!build.length}else $('buildFoot').hidden=true;
+ resetPick()};
+$('openAdd').onclick=()=>{mode='one';build=[];$('bName').value='';$('bServ').value=1;['cName','cCal','cPro'].forEach(i=>$(i).value='');$('customBox').hidden=true;
+ document.querySelectorAll('.mtabs button').forEach(b=>b.classList.toggle('on',b.dataset.mode==='one'));$('buildBox').hidden=true;$('buildFoot').hidden=true;
+ resetPick();renderBuild();$('buildFoot').hidden=true;open('addSheet')};
 
 // settings
 $('openSet').onclick=()=>{$('tCal').value=S.cal;$('tPro').value=S.pro;open('setSheet')};
