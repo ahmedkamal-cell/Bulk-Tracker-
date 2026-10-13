@@ -145,7 +145,7 @@ select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border
   <h2 class="sec" style="margin-top:18px">أكل زيادة</h2>
   <div id="extras"></div>
   <button class="addx" id="openAdd">+ سجّل أكل برّه البرنامج</button>
-  <button class="settings-btn" id="openSet">الهدف اليومي</button>
+  <button class="settings-btn" id="openSet">الهدف اليومي والمزامنة</button>
  </section>
 
  <section id="pgGym" hidden>
@@ -218,6 +218,12 @@ select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border
   <h3>الهدف اليومي</h3>
   <div class="grid2"><div><label>سعرات</label><input id="tCal" type="number" inputmode="numeric"></div><div><label>بروتين (جم)</label><input id="tPro" type="number" inputmode="numeric"></div></div>
   <button class="primary" id="saveSet">احفظ الهدف</button>
+  <h3 style="margin-top:24px">المزامنة بين الأجهزة</h3>
+  <p class="hint" style="margin-top:0">على الآيفون، أيقونة الـ app ولينك Safari بيحفظوا كل واحد لوحده. حط نفس اللينك وكلمة السر في الاتنين عشان يبقوا sync، وده كمان بيشغّل البحث أونلاين.</p>
+  <label>لينك الـ script</label><input id="syUrl" placeholder="https://script.google.com/macros/s/.../exec" dir="ltr">
+  <label>كلمة السر</label><input id="syTok" dir="ltr">
+  <div class="grid2"><button class="primary" id="syConnect">اربط واعمل مزامنة</button><button class="other" id="syOff" style="margin-bottom:10px">افصل</button></div>
+  <p class="hint" id="syncTxt" style="margin-top:4px"></p>
  </div></div>
 
 <script>
@@ -271,7 +277,40 @@ const $=id=>document.getElementById(id);
 const ar=n=>(Math.round(n*10)/10).toLocaleString('ar-EG');
 const dkey=d=>{const z=new Date(d.getTime()-d.getTimezoneOffset()*6e4);return 'day:'+z.toISOString().slice(0,10)};
 async function sget(k,def){try{const v=localStorage.getItem(k);return v?JSON.parse(v):def}catch(e){return def}}
-async function sset(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){console.error(e)}}
+// ---------- sync ----------
+const SYNC_KEYS=k=>k==='settings'||k==='customFoods'||k==='liftWeights'||k==='bodyweight'||k==='adjLog'||k.startsWith('day:');
+const getTs=()=>{try{return JSON.parse(localStorage.getItem('meta:ts')||'{}')}catch(e){return{}}};
+const setTs=t=>localStorage.setItem('meta:ts',JSON.stringify(t));
+const syncCfg=()=>{try{return JSON.parse(localStorage.getItem('syncCfg')||'null')}catch(e){return null}};
+let pushTimer=null,syncing=false,lastSync=null,syncErr='';
+async function sset(k,v){try{localStorage.setItem(k,JSON.stringify(v));if(SYNC_KEYS(k)){const t=getTs();t[k]=Date.now();setTs(t);schedulePush()}}catch(e){console.error(e)}}
+function schedulePush(){if(!syncCfg())return;clearTimeout(pushTimer);pushTimer=setTimeout(()=>syncNow(false),1500)}
+async function syncNow(reload=true){
+ const cfg=syncCfg();if(!cfg||syncing)return;syncing=true;setSyncTxt('بيعمل مزامنة...');
+ try{
+  const r=await fetch(cfg.url+'?token='+encodeURIComponent(cfg.token));const j=await r.json();
+  if(j.error)throw new Error(j.error==='token'?'كلمة السر غلط':j.error);
+  const cloud=j.data||{},ts=getTs();let changed=false;
+  for(const [k,o] of Object.entries(cloud)){if(!SYNC_KEYS(k))continue;if((+o.t||0)>(ts[k]||0)){localStorage.setItem(k,o.v);ts[k]=+o.t;changed=true}}
+  setTs(ts);
+  const items=[];
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(!SYNC_KEYS(k))continue;const lt=ts[k]||0,ct=cloud[k]?(+cloud[k].t||0):-1;
+   if(lt>ct)items.push({k,v:localStorage.getItem(k),t:lt||1})}
+  if(items.length){const pr=await fetch(cfg.url,{method:'POST',body:JSON.stringify({token:cfg.token,items})});const pj=await pr.json();if(pj.error)throw new Error(pj.error)}
+  lastSync=new Date();syncErr='';
+  if(changed&&reload)await reloadState();
+ }catch(e){syncErr=e.message||'مش قادر أوصل'}
+ syncing=false;setSyncTxt();
+}
+function setSyncTxt(t){const el=document.getElementById('syncTxt');if(!el)return;const cfg=syncCfg();
+ el.textContent=t||(!cfg?'المزامنة مش متفعّلة.':syncErr?'آخر محاولة فشلت: '+syncErr:lastSync?'آخر مزامنة: '+lastSync.toLocaleTimeString('ar-EG',{hour:'numeric',minute:'2-digit'}):'متفعّلة.')}
+async function reloadState(){
+ S=await sget('settings',S);custom=await sget('customFoods',[]);weights=await sget('liftWeights',{});
+ bw=(await sget('bodyweight',[])).map(b=>{const t=new Date(b.d);t.setHours(0,0,0,0);return{d:t.getTime(),w:b.w}}).sort((a,b)=>a.d-b.d);adj=await sget('adjLog',[]);
+ D=await sget(dkey(day),{sw:{},eat:{},ex:[]});D.alt=D.alt||{};renderToday();
+ if(!$('pgGym').hidden)renderGym();if(!$('pgWeight').hidden)renderWeight();
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow()});
 const BASE_CAL=2800,DAY=864e5;
 const steps=()=>Math.round(((S.cal||BASE_CAL)-BASE_CAL)/200);
 function plan(){const p=PLANS[DAYMAP[day.getDay()][0]],k=steps();if(k<=0)return p;const ids=Object.keys(CAT.B.i);
@@ -349,16 +388,18 @@ function renderFoods(){
 let olist=[];
 async function searchOnline(q){
  const box=$('onlineList');box.innerHTML='<p class="hint" style="margin:8px 0">بدوّر... ممكن ياخد كام ثانية</p>';
+ const tfetch=(u)=>{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),20000);return fetch(u,{signal:ac.signal}).finally(()=>clearTimeout(tm))};
+ let raw=null;const cfg=syncCfg();
  try{
-  const r=await fetch('https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&json=1&page_size=24&fields=product_name,product_name_ar,brands,nutriments,serving_quantity&search_terms='+encodeURIComponent(q));
-  const j=await r.json();
-  olist=(j.products||[]).map(p=>{const nu=p.nutriments||{},c=+nu['energy-kcal_100g'],pr=+(nu.proteins_100g||0),sq=+p.serving_quantity||0;
-   const nm=(p.product_name_ar||p.product_name||'').trim();if(!nm||!(c>0))return null;
-   const n=nm+(p.brands?' - '+p.brands.split(',')[0].trim():'');
-   return{n,kind:'o',c100:c,p100:pr,sq,units:[{u:'جرام',c:c/100,p:pr/100,g:1},...(sq>0?[{u:'حصة/عبوة',c:c*sq/100,p:pr*sq/100,g:sq}]:[])]}}).filter(Boolean);
-  box.innerHTML=olist.length?'<p class="hint" style="margin:8px 0 4px">نتايج أونلاين (أغلبها منتجات معبّأة):</p>'+olist.map((f,i)=>`<button class="opt ${sel===f?'sel':''}" data-o="${i}"><span>${f.n}</span><small>${ar(Math.round(f.c100))} سعر / 100 جم</small></button>`).join('')
-   :'<p class="hint" style="margin:8px 0">مالقيتش نتايج أونلاين. لو أكلة بيتي، اعملها من مكوناتها.</p>';
- }catch(e){box.innerHTML='<p class="hint" style="margin:8px 0">مش قادر أوصل للنت دلوقتي. جرّب تاني أو اعملها من مكوناتها.</p>'}
+  if(cfg){const r=await tfetch(cfg.url+'?token='+encodeURIComponent(cfg.token)+'&food='+encodeURIComponent(q));const j=await r.json();if(j.error)throw new Error(j.error);raw=j.items||[]}
+  else{const r=await tfetch('https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&json=1&page_size=24&fields=product_name,product_name_ar,brands,nutriments,serving_quantity&search_terms='+encodeURIComponent(q));
+   if(!r.ok||!(r.headers.get('content-type')||'').includes('json'))throw new Error('busy');
+   const j=await r.json();raw=(j.products||[]).map(p=>{const nu=p.nutriments||{};return{n:((p.product_name_ar||p.product_name||'').trim())+(p.brands?' - '+p.brands.split(',')[0].trim():''),c:+nu['energy-kcal_100g'],p:+(nu.proteins_100g||0),sq:+p.serving_quantity||0}})}
+ }catch(e){
+  box.innerHTML='<p class="hint" style="margin:8px 0">'+(!navigator.onLine?'الموبايل مش متصل بالنت.':!cfg?'موقع البحث مش راد دلوقتي. عشان البحث يشتغل على طول، اربط الـ Google Sheet من "الهدف اليومي والمزامنة".':'موقع البحث مش راد دلوقتي، جرّب كمان دقيقة.')+' وممكن تعملها من مكوناتها.</p>';return}
+ olist=raw.filter(x=>x.n&&x.c>0).map(x=>({n:x.n,kind:'o',c100:x.c,p100:x.p,sq:x.sq,units:[{u:'جرام',c:x.c/100,p:x.p/100,g:1},...(x.sq>0?[{u:'حصة/عبوة',c:x.c*x.sq/100,p:x.p*x.sq/100,g:x.sq}]:[])]}));
+ box.innerHTML=olist.length?'<p class="hint" style="margin:8px 0 4px">نتايج أونلاين (أغلبها منتجات معبّأة):</p>'+olist.map((f,i)=>`<button class="opt" data-o="${i}"><span>${f.n}</span><small>${ar(Math.round(f.c100))} سعر / 100 جم</small></button>`).join('')
+  :'<p class="hint" style="margin:8px 0">مالقيتش نتايج. جرّب اسم تاني أو بالإنجليزي، أو اعملها من مكوناتها.</p>';
 }
 $('moreBox').onclick=e=>{
  if(e.target.id==='goOnline')searchOnline($('search').value.trim());
@@ -414,7 +455,12 @@ $('openAdd').onclick=()=>{addFor=null;$('addFor').textContent='بتسجّل في
  resetPick();renderBuild();$('buildFoot').hidden=true;open('addSheet')};
 
 // settings
-$('openSet').onclick=()=>{$('tCal').value=S.cal;$('tPro').value=S.pro;open('setSheet')};
+$('openSet').onclick=()=>{$('tCal').value=S.cal;$('tPro').value=S.pro;const c=syncCfg();$('syUrl').value=c?c.url:'';$('syTok').value=c?c.token:'';setSyncTxt();open('setSheet')};
+$('syConnect').onclick=async()=>{const url=$('syUrl').value.trim(),token=$('syTok').value.trim();
+ if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)){setSyncTxt('اللينك لازم يبدأ بـ https://script.google.com وينتهي بـ /exec');return}
+ if(!token){$('syTok').focus();return}
+ localStorage.setItem('syncCfg',JSON.stringify({url,token}));syncErr='';await syncNow(true)};
+$('syOff').onclick=()=>{localStorage.removeItem('syncCfg');lastSync=null;setSyncTxt()};
 $('saveSet').onclick=async()=>{S={...S,cal:+$('tCal').value||2800,pro:+$('tPro').value||145};await sset('settings',S);close('setSheet');renderToday()};
 
 // weight
@@ -482,7 +528,8 @@ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.parentEleme
  S=await sget('settings',S);custom=await sget('customFoods',[]);weights=await sget('liftWeights',{});bw=(await sget('bodyweight',[])).map(b=>{const t=new Date(b.d);t.setHours(0,0,0,0);return{d:t.getTime(),w:b.w}}).sort((a,b)=>a.d-b.d);adj=await sget('adjLog',[]);
  const g=DAYMAP[new Date().getDay()][1];
  if(g)gymSel=g;else{for(let i=1;i<7;i++){const n=DAYMAP[(new Date().getDay()+i)%7][1];if(n){gymSel=n;break}}}
- loadDay();
+ await loadDay();
+ syncNow();
 })();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
 </script>
