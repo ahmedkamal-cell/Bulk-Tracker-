@@ -59,6 +59,12 @@ h2.sec{font-size:15px;font-weight:600;color:var(--muted);margin:6px 0 10px}
 .tabbar{position:fixed;bottom:0;left:0;right:0;background:var(--panel);display:flex;justify-content:center;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:4}
 .tabbar button{flex:1;max-width:160px;padding:12px 0 14px;font-size:14px;color:var(--muted)}
 .tabbar button.on{color:var(--cal);font-weight:600}
+.weekc{background:var(--panel);border-radius:14px;padding:12px 14px;margin-bottom:14px;border-right:4px solid var(--pro)}
+.weekc b{display:block;font-size:15px}.weekc small{color:var(--muted);font-size:13px}
+.ex.new{border:1px solid var(--pro)}
+.tag{display:inline-block;font-size:11px;background:var(--pro);color:#13212C;border-radius:6px;padding:1px 6px;margin-right:6px;font-weight:600;vertical-align:middle}
+.last{color:var(--muted);font-size:12px;margin-top:2px}
+.jump{margin-top:8px;font-size:13px;color:var(--cal);border:1px solid var(--line);border-radius:10px;padding:6px 12px}
 .dtabs{display:flex;gap:6px;margin-bottom:14px}
 .dtabs button{flex:1;padding:9px 0;border-radius:10px;background:var(--panel);font-size:13px}
 .dtabs button.on{background:var(--pro);color:#13212C;font-weight:600}
@@ -149,12 +155,17 @@ select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border
  </section>
 
  <section id="pgGym" hidden>
-  <div class="dtabs" id="dtabs"></div>
+  <div class="top">
+   <button class="nav" id="gNext" aria-label="اليوم اللي بعده">›</button>
+   <div class="date" id="gDate"></div>
+   <button class="nav" id="gPrev" aria-label="اليوم اللي قبله">‹</button>
+  </div>
+  <div id="weekCard"></div>
   <div id="exList"></div>
   <div class="rules">
    <p>ابدأ بـ 5-10 دقايق تسخين ومجموعتين خفاف قبل أول تمرين.</p>
    <p>وقّف المجموعة وانت لسه قادر تعمل 1-2 عدة كمان.</p>
-   <p>لما توصل لأعلى رقم عدات في كل المجموعات، زوّد الوزن المرة الجاية. اكتب الوزن في الخانة عشان تفتكره.</p>
+   <p>لما توصل لأعلى رقم عدات في كل المجموعات، زوّد الوزن المرة الجاية. اكتب الوزن اللي شلته في الخانة، وهيظهر لك المرة الجاية تحت "آخر مرة".</p>
   </div>
  </section>
 
@@ -217,7 +228,8 @@ select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border
  <div class="sheet" role="dialog" aria-label="الهدف ووزنك">
   <h3>الهدف اليومي</h3>
   <div class="grid2"><div><label>سعرات</label><input id="tCal" type="number" inputmode="numeric"></div><div><label>بروتين (جم)</label><input id="tPro" type="number" inputmode="numeric"></div></div>
-  <button class="primary" id="saveSet">احفظ الهدف</button>
+  <label>بداية البرنامج (أول يوم في أول أسبوع)</label><input id="tStart" type="date">
+  <button class="primary" id="saveSet">احفظ</button>
   <h3 style="margin-top:24px">المزامنة بين الأجهزة</h3>
   <p class="hint" style="margin-top:0">على الآيفون، أيقونة الـ app ولينك Safari بيحفظوا كل واحد لوحده. حط نفس اللينك وكلمة السر في الاتنين عشان يبقوا sync، وده كمان بيشغّل البحث أونلاين.</p>
   <label>لينك الـ script</label><input id="syUrl" placeholder="https://script.google.com/macros/s/.../exec" dir="ltr">
@@ -252,6 +264,48 @@ const GYM={
 };
 // getDay: 0 Sun ... 6 Sat
 const DAYMAP={0:['eve','u1'],1:['rest',null],2:['eve','l1'],3:['wed','u2'],4:['thu','l2'],5:['rest',null],6:['rest',null]};
+const DEF_START='2026-10-10';
+// تمارين بتتضاف من الأسبوع التالت
+const ADDS={u1:[{after:'Barbell Bench Press',ex:['تفتيح صدر بالكابل أو الدمبل','Cable / Dumbbell Fly','3 × 12-15',A1]},{after:'Lat Pulldown',ex:['رفرفة جانبي بالدمبل','Dumbbell Lateral Raise','3 × 12-15',A1]}],
+ l1:[{after:'Standing Calf Raise',ex:['ترابيس بالدمبل (هز الكتف لفوق)','Dumbbell Shrugs','3 × 10-12',A1]}],
+ u2:[{after:'Incline Dumbbell Press',ex:['ضغط صدر على الجهاز','Machine Chest Press','3 × 10-12',A1]},{after:'Overhead Triceps Extension',ex:['ساعد: لف الرسغ بالدمبل','Wrist Curl','2 × 15-20',A1]}]};
+// تبديلات المرحلة التانية (من الأسبوع 10)
+const SWAPS2={'Cable / Dumbbell Fly':['ديبس على المتوازي','Dips','3 × 8-12',A1],'Machine Chest Press':['ضغط صدر دمبل على بنش مستوي','Flat Dumbbell Press','3 × 8-10',A1],
+ 'Barbell Curl':['بايسبس دمبل على بنش مايل','Incline Dumbbell Curl','2 × 10-12',A1],'Triceps Pushdown':['ترايسبس بار EZ وانت نايم','Skull Crusher','2 × 10-12',A1],
+ 'Leg Extension':['هاك سكوات على الجهاز','Hack Squat','3 × 10-12',C1],'Seated Cable Row':['رو دمبل بإيد واحدة','One-Arm Dumbbell Row','3 × 10 لكل إيد',A1],
+ 'Dumbbell Shrugs':['ترابيس بالبار','Barbell Shrugs','3 × 10-12',A1],'Wrist Curl':['ساعد: بايسبس عكسي بالبار','Reverse Curl','2 × 12-15',A1]};
+const ymd=d=>{const z=new Date(d.getTime()-d.getTimezoneOffset()*6e4);return z.toISOString().slice(0,10)};
+function weekNo(d){const st=new Date((S.start||DEF_START)+'T00:00:00'),x=new Date(d);x.setHours(0,0,0,0);const diff=Math.floor((x-st)/864e5);return diff<0?0:Math.floor(diff/7)+1}
+const isDeload=w=>w===9||w===18;
+const SLOT_TIME={0:'8:30 م',2:'8:30 م',3:'3:00 م',4:'6:00 م'};
+const mid=d=>{const x=new Date(d);x.setHours(0,0,0,0);return x};
+function dayRec(d){if(D&&mid(d).getTime()===mid(day).getTime())return D;try{return JSON.parse(localStorage.getItem(dkey(d))||'{}')||{}}catch(e){return{}}}
+function weekStartOf(d){const st=mid(new Date((S.start||DEF_START)+'T00:00:00')),x=mid(d);const diff=Math.round((x-st)/864e5);const ws=new Date(x);ws.setDate(x.getDate()-(((diff%7)+7)%7));return ws}
+// بيحسب تمرين اليوم: لو فوّت يوم، التمرين بيترحل لأول يوم تمرين جاي، واللي يفضل آخر الأسبوع بيتلغي
+function sessionFor(d){const x=mid(d),ws=weekStartOf(x);let q=['u1','l1','u2','l2'],missed=0;
+ for(let t=new Date(ws);t<x;t.setDate(t.getDate()+1)){const r=dayRec(t),sch=!!DAYMAP[t.getDay()][1];
+  if(sch&&r.gs==='missed'){missed++;continue}
+  if(r.gs==='extra'){if(q.length)q.shift();missed=Math.max(0,missed-1);continue}
+  if(sch&&q.length)q.shift()}
+ const r=dayRec(x),sch=!!DAYMAP[x.getDay()][1];let slotsLeft=0;
+ for(let t=new Date(x);t<new Date(ws.getTime()+7*864e5);t.setDate(t.getDate()+1))if(DAYMAP[t.getDay()][1])slotsLeft++;
+ return{g:q[0]||null,sch,status:r.gs||'',missed,queue:q,slotsLeft,train:(sch&&r.gs!=='missed')||r.gs==='extra'}}
+function workoutFor(d){const ss=sessionFor(d);if(!ss.train||!ss.g)return null;const g=ss.g;const w=weekNo(d);
+ let list=GYM[g].ex.map(x=>({x:[...x],isNew:false}));
+ if(w>=3)(ADDS[g]||[]).forEach(a=>{const i=list.findIndex(o=>o.x[1]===a.after);list.splice(i+1,0,{x:[...a.ex],isNew:w===3})});
+ if(w>=10)list=list.map(o=>SWAPS2[o.x[1]]?{x:[...SWAPS2[o.x[1]]],isNew:w===10}:o);
+ if(w===1)list.forEach(o=>{o.x[2]=o.x[2].replace(/^\d+/,'2')});
+ if(isDeload(w))list.forEach(o=>{o.x[2]=o.x[2].replace(/^\d+/,n=>String(Math.max(1,Math.ceil(+n/2))))});
+ return{g,w,list}}
+function weekNote(w){
+ if(w===0)return['البرنامج لسه مابدأش','تقدر تغيّر تاريخ البداية من "الهدف اليومي والمزامنة".'];
+ if(w===1)return['الأسبوع ١: أسبوع رجوع','مجموعتين بس في كل تمرين، وأوزان خفيفة تقدر تعمل بيها العدات وانت لسه قادر تكمّل 3-4 عدات.'];
+ if(w===2)return['الأسبوع ٢','3 مجموعات زي البرنامج. ابدأ تزوّد الوزن لما العدات تبقى سهلة.'];
+ if(w===3)return['الأسبوع ٣: اتضافت تمارين','الأحد: تفتيح صدر ورفرفة جانبي. التلات: ترابيس. الأربع: ضغط صدر جهاز وساعد. التمارين الجديدة متعلّمة.'];
+ if(w===9||w===18)return['الأسبوع '+ar(w)+': أسبوع تخفيف (Deload)','نص المجموعات، وأوزان أخف بحوالي 10-20%. ده مقصود عشان جسمك يرتاح وترجع أقوى، مش تراجع.'];
+ if(w===10)return['الأسبوع ١٠: المرحلة التانية','نفس التمارين الأساسية، واتغيّرت التمارين المساعدة. الجديد متعلّم. ابدأ التمارين الجديدة بوزن متوسط.'];
+ if(w>=19)return['الأسبوع '+ar(w),'خلّصت المرحلتين. ابعت تقدمك ونتائج InBody جديدة نراجع البرنامج. لحد ما نراجع، كمّل على نفس التمارين.'];
+ return['الأسبوع '+ar(w)+(w<9?' · المرحلة الأولى':' · المرحلة التانية'),'كمّل وزوّد الوزن لما توصل لأعلى رقم عدات في كل المجموعات.'+(w===8||w===17?' الأسبوع الجاي تخفيف.':'')]}
 // أكلات جاهزة: [الاسم، الوحدة، سعرات، بروتين]
 const DISHES=[['كشري','طبق وسط',700,20],['كشري','طبق كبير',950,27],['شاورما فراخ','ساندوتش',450,25],['شاورما لحمة','ساندوتش',500,25],['فتة شاورما','طبق',900,40],['برجر','ساندوتش',550,25],['حواوشي','رغيف',650,28],['بيتزا','قطعة',285,12],['فول بالزيت','طبق',340,14],['ساندوتش فول','ساندوتش',300,12],['ساندوتش طعمية','ساندوتش',350,10],['ساندوتش كبدة','ساندوتش',400,22],['ساندوتش سجق','ساندوتش',450,15],['محشي','طبق 300 جم',420,9],['ملوخية','طبق',150,8],['مسقعة','طبق',330,5],['بامية باللحمة','طبق',350,20],['فطير مشلتت','ربع فطيرة',450,8],['شيك التضخيم','كوباية كبيرة',545,20],['بسبوسة','قطعة',300,4],['كنافة','قطعة',400,6],['أرز باللبن','علبة',200,6],['شوكولاتة','قطعة 40 جم',210,3],['بيبسي','كانز',140,0],['عصير برتقال','كوباية',110,2]];
 // مكونات لكل 100 جم: [الاسم، سعرات، بروتين، وحدة، وزن الوحدة بالجرام]
@@ -272,7 +326,7 @@ const LIB=[...DISHES.map(([n,u,c,p])=>({n,kind:'d',units:[{u,c,p}]})),
  ...ING.map(([n,c,p,u,g])=>({n,kind:'i',units:[{u:'جرام',c:c/100,p:p/100,g:1},...(u?[{u,c:c*g/100,p:p*g/100,g}]:[])]}))];
 
 
-let S={cal:2800,pro:145},custom=[],weights={},bw=[],day=new Date(),D=null,gymSel='u1',swapCtx=null;
+let S={cal:2800,pro:145},custom=[],weights={},bw=[],day=new Date(),D=null,swapCtx=null;
 const $=id=>document.getElementById(id);
 const ar=n=>(Math.round(n*10)/10).toLocaleString('ar-EG');
 const dkey=d=>{const z=new Date(d.getTime()-d.getTimezoneOffset()*6e4);return 'day:'+z.toISOString().slice(0,10)};
@@ -319,7 +373,7 @@ const item=(cat,id)=>{const x=CAT[cat].i[id];return{n:x[0],c:x[1],p:x[2]}};
 const compId=(mi,ci,def)=>D.sw[mi+'-'+ci]||def;
 const save=()=>sset(dkey(day),D);
 
-async function loadDay(){D=await sget(dkey(day),{sw:{},eat:{},ex:[]});D.alt=D.alt||{};renderToday()}
+async function loadDay(){D=await sget(dkey(day),{sw:{},eat:{},ex:[]});D.alt=D.alt||{};renderToday();if(!$('pgGym').hidden)renderGym()}
 function mealTotals(mi){const al=D.alt[mi];if(al&&al.length)return al.reduce((a,x)=>({c:a.c+x.c,p:a.p+x.p}),{c:0,p:0});return plan()[mi][2].reduce((a,[cat,def],ci)=>{const x=item(cat,compId(mi,ci,def));return{c:a.c+x.c,p:a.p+x.p}},{c:0,p:0})}
 function renderToday(){
  const today=new Date().toDateString()===day.toDateString();
@@ -334,8 +388,10 @@ function renderToday(){
  $('eaten').textContent='كلت '+ar(Math.round(cal))+' من '+ar(S.cal);
  $('protTxt').textContent=ar(Math.round(pro))+' / '+ar(S.pro)+' جم';
  $('protBar').style.width=Math.min(pro/S.pro*100,100)+'%';
- const g=DAYMAP[day.getDay()][1],gd=$('gymday');
- if(g){gd.className='gymday';gd.innerHTML=`<div><b>تمرين ${GYM[g].t}</b><small>الساعة ${GYM[g].time} · ${GYM[g].ex.length} تمارين</small></div><span>‹</span>`;gd.onclick=()=>{gymSel=g;show('pgGym')}}
+ const ss=sessionFor(day),g=ss.train?ss.g:null,gd=$('gymday');
+ if(g){const wo=workoutFor(day);gd.className='gymday';gd.innerHTML=`<div><b>تمرين ${GYM[g].t}${ss.status==='extra'?' (تعويض)':''}</b><small>${SLOT_TIME[day.getDay()]?'الساعة '+SLOT_TIME[day.getDay()]+' · ':''}${wo.list.length} تمارين${wo.w?' · الأسبوع '+ar(wo.w):''}</small></div><span>‹</span>`;gd.onclick=()=>show('pgGym')}
+ else if(ss.status==='missed'){gd.className='gymday rest';gd.innerHTML='<div><b>فوّت تمرين النهارده</b><small>اترحل لأول يوم تمرين جاي</small></div><span>‹</span>';gd.onclick=()=>show('pgGym')}
+ else if(ss.missed>0&&ss.g){gd.className='gymday';gd.innerHTML=`<div><b>عندك تمرين متأجل: ${GYM[ss.g].t}</b><small>تقدر تعوّضه النهارده من تاب التمرين</small></div><span>‹</span>`;gd.onclick=()=>show('pgGym')}
  else{gd.className='gymday rest';gd.innerHTML='<div><b>يوم راحة</b><small>الأكل مهم النهارده زي أيام التمرين</small></div>';gd.onclick=null}
  const k=steps();$('planNote').innerHTML=k<0?`<div class="note">الهدف اتقلل ${ar(-k*200)} سعر عشان وزنك بيزيد أسرع من المطلوب. قلّل من النشويات حوالي ${ar(-k*0.5)} كوب رز أو مكرونة في اليوم.</div>`:'';
  $('meals').innerHTML=plan().map((m,mi)=>{
@@ -372,7 +428,7 @@ $('swapList').onclick=async e=>{const b=e.target.closest('.opt');if(!b)return;co
 
 // extras sheet
 let mode='one',sel=null,build=[];
-const custUnits=f=>f.per100?[{u:'جرام',c:f.c/100,p:f.p/100,g:1},...(f.sq?[{u:'حصة/عبوة',c:f.c*f.sq/100,p:f.p*f.sq/100,g:f.sq}]:[])]:[{u:f.u||'حصة',c:f.c,p:f.p}];
+const custUnits=f=>f.per100?[{u:'جرام',c:f.c/100,p:f.p/100,g:1},...(f.sq?[{u:f.su||'حصة/عبوة',c:f.c*f.sq/100,p:f.p*f.sq/100,g:f.sq}]:[])]:[{u:f.u||'حصة',c:f.c,p:f.p}];
 const lib=()=>[...custom.map(f=>({n:f.n,kind:'c',units:custUnits(f)})),...LIB];
 function renderFoods(){
  const nz=t=>t.replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').trim();
@@ -397,8 +453,8 @@ async function searchOnline(q){
    const j=await r.json();raw=(j.products||[]).map(p=>{const nu=p.nutriments||{};return{n:((p.product_name_ar||p.product_name||'').trim())+(p.brands?' - '+p.brands.split(',')[0].trim():''),c:+nu['energy-kcal_100g'],p:+(nu.proteins_100g||0),sq:+p.serving_quantity||0}})}
  }catch(e){
   box.innerHTML='<p class="hint" style="margin:8px 0">'+(!navigator.onLine?'الموبايل مش متصل بالنت.':!cfg?'موقع البحث مش راد دلوقتي. عشان البحث يشتغل على طول، اربط الـ Google Sheet من "الهدف اليومي والمزامنة".':'موقع البحث مش راد دلوقتي، جرّب كمان دقيقة.')+' وممكن تعملها من مكوناتها.</p>';return}
- olist=raw.filter(x=>x.n&&x.c>0).map(x=>({n:x.n,kind:'o',c100:x.c,p100:x.p,sq:x.sq,units:[{u:'جرام',c:x.c/100,p:x.p/100,g:1},...(x.sq>0?[{u:'حصة/عبوة',c:x.c*x.sq/100,p:x.p*x.sq/100,g:x.sq}]:[])]}));
- box.innerHTML=olist.length?'<p class="hint" style="margin:8px 0 4px">نتايج أونلاين (أغلبها منتجات معبّأة):</p>'+olist.map((f,i)=>`<button class="opt" data-o="${i}"><span>${f.n}</span><small>${ar(Math.round(f.c100))} سعر / 100 جم</small></button>`).join('')
+ olist=raw.filter(x=>x.n&&x.c>0).map(x=>({n:x.n,ai:!!x.ai,kind:'o',c100:x.c,p100:x.p,sq:x.sq,su:x.su||'',units:[{u:'جرام',c:x.c/100,p:x.p/100,g:1},...(x.sq>0?[{u:x.su||'حصة/عبوة',c:x.c*x.sq/100,p:x.p*x.sq/100,g:x.sq}]:[])]}));
+ box.innerHTML=olist.length?'<p class="hint" style="margin:8px 0 4px">نتايج أونلاين:</p>'+olist.map((f,i)=>`<button class="opt" data-o="${i}"><span>${f.n}${f.ai?' <span class="tag">تقدير</span>':''}</span><small>${f.sq>0&&f.su?ar(Math.round(f.c100*f.sq/100))+' سعر / '+f.su:ar(Math.round(f.c100))+' سعر / 100 جم'}</small></button>`).join('')
   :'<p class="hint" style="margin:8px 0">مالقيتش نتايج. جرّب اسم تاني أو بالإنجليزي، أو اعملها من مكوناتها.</p>';
 }
 $('moreBox').onclick=e=>{
@@ -406,7 +462,7 @@ $('moreBox').onclick=e=>{
  if(e.target.id==='goBuild'){const n=$('search').value.trim();document.querySelector('[data-mode=build]').click();$('bName').value=n;$('search').focus()}};
 $('onlineList').onclick=e=>{const b=e.target.closest('.opt');if(!b)return;pick(olist[+b.dataset.o]);
  $('onlineList').querySelectorAll('.opt').forEach(x=>x.classList.toggle('sel',x===b))};
-async function rememberOnline(f){if(f.kind!=='o')return;custom=[{n:f.n,per100:true,c:f.c100,p:f.p100,sq:f.sq},...custom.filter(x=>x.n!==f.n)];await sset('customFoods',custom)}
+async function rememberOnline(f){if(f.kind!=='o')return;custom=[{n:f.n,per100:true,c:f.c100,p:f.p100,sq:f.sq,su:f.su},...custom.filter(x=>x.n!==f.n)];await sset('customFoods',custom)}
 $('foodList').onclick=e=>{const b=e.target.closest('.opt');if(!b)return;pick($('foodList')._list[+b.dataset.i]);renderFoods()};
 function pick(f){sel=f;
  const us=sel.units,def=us.length>1?1:0;
@@ -455,13 +511,13 @@ $('openAdd').onclick=()=>{addFor=null;$('addFor').textContent='بتسجّل في
  resetPick();renderBuild();$('buildFoot').hidden=true;open('addSheet')};
 
 // settings
-$('openSet').onclick=()=>{$('tCal').value=S.cal;$('tPro').value=S.pro;const c=syncCfg();$('syUrl').value=c?c.url:'';$('syTok').value=c?c.token:'';setSyncTxt();open('setSheet')};
+$('openSet').onclick=()=>{$('tCal').value=S.cal;$('tPro').value=S.pro;$('tStart').value=S.start||DEF_START;const c=syncCfg();$('syUrl').value=c?c.url:'';$('syTok').value=c?c.token:'';setSyncTxt();open('setSheet')};
 $('syConnect').onclick=async()=>{const url=$('syUrl').value.trim(),token=$('syTok').value.trim();
  if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)){setSyncTxt('اللينك لازم يبدأ بـ https://script.google.com وينتهي بـ /exec');return}
  if(!token){$('syTok').focus();return}
  localStorage.setItem('syncCfg',JSON.stringify({url,token}));syncErr='';await syncNow(true)};
 $('syOff').onclick=()=>{localStorage.removeItem('syncCfg');lastSync=null;setSyncTxt()};
-$('saveSet').onclick=async()=>{S={...S,cal:+$('tCal').value||2800,pro:+$('tPro').value||145};await sset('settings',S);close('setSheet');renderToday()};
+$('saveSet').onclick=async()=>{S={...S,cal:+$('tCal').value||2800,pro:+$('tPro').value||145,start:$('tStart').value||DEF_START};await sset('settings',S);close('setSheet');renderToday()};
 
 // weight
 let adj=[];
@@ -509,13 +565,35 @@ $('saveBw').onclick=async()=>{const w=parseFloat($('bwIn').value);if(!w||w<30||w
 $('bwList').onclick=async e=>{const i=e.target.dataset.bw;if(i===undefined)return;bw.splice(+i,1);await sset('bodyweight',bw);renderWeight()};
 
 // gym
+function lastLift(key){const cur=dkey(day);let best=null;
+ for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(!k.startsWith('day:')||k>=cur)continue;
+  try{const v=JSON.parse(localStorage.getItem(k));const w=v&&v.lw&&v.lw[key];if(w&&(!best||k>best.k))best={k,w}}catch(e){}}
+ if(best)return{w:best.w,d:new Date(best.k.slice(4)+'T00:00:00')};
+ return weights[key]?{w:weights[key],d:null}:null}
 function renderGym(){
- $('dtabs').innerHTML=Object.entries(GYM).map(([k,g])=>`<button class="${k===gymSel?'on':''}" data-g="${k}">${g.day}</button>`).join('');
- const g=GYM[gymSel];
- $('exList').innerHTML=`<h2 class="sec">${g.t} · الساعة ${g.time}</h2>`+g.ex.map((x,i)=>{const id=gymSel+i;return `<div class="ex"><div class="n"><b>${x[0]}</b><small>${x[1]}</small><div class="sr">${x[2]} · راحة ${x[3]}</div></div><input type="number" inputmode="decimal" placeholder="كجم" aria-label="الوزن" data-w="${id}" value="${weights[id]??''}"></div>`}).join('');
+ const today=new Date().toDateString()===day.toDateString();
+ $('gDate').innerHTML=(today?'النهارده':day.toLocaleDateString('ar-EG',{weekday:'long'}))+'<small>'+day.toLocaleDateString('ar-EG',{weekday:today?'long':undefined,day:'numeric',month:'long'})+'</small>';
+ const wo=workoutFor(day),w=weekNo(day),[nt,nd]=weekNote(w);
+ $('weekCard').innerHTML=`<div class="weekc"><b>${nt}</b><small>${nd}</small></div>`;
+ const ss=sessionFor(day);
+ if(ss.status==='missed'){const nxt=ss.queue.length;$('exList').innerHTML=`<div class="gymday rest" style="display:block"><b>فوّت تمرين ${GYM[ss.g||'u1'].t} النهارده</b><small>${ss.slotsLeft>1?'هيترحل لأول يوم تمرين جاي، والجدول هيكمّل بالترتيب.':'ده آخر يوم تمرين في الأسبوع. لو معوّضتهوش بكره، هيتلغي والأسبوع الجاي يبدأ من الأول.'}</small><br><button class="jump" data-gs="">تراجع، أنا اتمرنت</button></div>`;return}
+ if(!wo){
+  if(ss.missed>0&&ss.g){$('exList').innerHTML=`<div class="gymday" style="display:block"><b>عندك تمرين متأجل: ${GYM[ss.g].t}</b><small>النهارده يوم راحة، بس تقدر تعوّض فيه التمرين اللي فاتك. لو معوّضتهوش، هيتعمل في يوم التمرين الجاي.</small><br><button class="jump" data-gs="extra">هتمرن النهارده (تعويض)</button></div>`;return}
+  let f=null;for(let i=1;i<=7;i++){const nx=new Date(day);nx.setDate(day.getDate()+i);if(DAYMAP[nx.getDay()][1]){f=nx;break}}
+  const sf=sessionFor(f),g2=sf.g||'u1';
+  $('exList').innerHTML=`<div class="gymday rest" style="display:block"><b>يوم راحة</b><small>التمرين الجاي: ${GYM[g2].t}، ${f.toLocaleDateString('ar-EG',{weekday:'long',day:'numeric',month:'long'})} الساعة ${SLOT_TIME[f.getDay()]}</small><br><button class="jump" id="jumpNext" data-off="${Math.round((mid(f)-mid(day))/864e5)}">روح للتمرين الجاي</button></div>`;return}
+ const G=GYM[wo.g];const lw=(D&&D.lw)||{};
+ const tm=SLOT_TIME[day.getDay()];
+ $('exList').innerHTML=`<h2 class="sec">${G.t}${ss.status==='extra'?' (تعويض)':''}${tm?' · الساعة '+tm:''}</h2>`+wo.list.map(({x,isNew})=>{const key=wo.g+':'+x[1],l=lastLift(key);
+  return `<div class="ex ${isNew?'new':''}"><div class="n"><b>${x[0]}${isNew?'<span class="tag">جديد</span>':''}</b><small>${x[1]}</small><div class="sr">${x[2]} · راحة ${x[3]}</div>${l?`<div class="last">آخر مرة: ${l.w} كجم${l.d?' ('+l.d.toLocaleDateString('ar-EG',{day:'numeric',month:'long'})+')':''}</div>`:''}</div><input type="number" inputmode="decimal" placeholder="كجم" aria-label="الوزن النهارده" data-w="${key}" value="${lw[key]??''}"></div>`}).join('')+
+  (ss.status==='extra'?'<button class="jump" data-gs="" style="display:block;margin:6px auto 0">إلغاء التعويض</button>':'<button class="jump" data-gs="missed" style="display:block;margin:6px auto 0">مقدرتش أروح النهارده</button>');
 }
-$('dtabs').onclick=e=>{if(e.target.dataset.g){gymSel=e.target.dataset.g;renderGym()}};
-$('exList').onchange=async e=>{const id=e.target.dataset.w;if(!id)return;weights[id]=e.target.value;await sset('liftWeights',weights)};
+$('exList').onclick=async e=>{const t=e.target;
+ if(t.id==='jumpNext'){day.setDate(day.getDate()+ +t.dataset.off);loadDay();return}
+ if(t.dataset.gs!==undefined){if(t.dataset.gs)D.gs=t.dataset.gs;else delete D.gs;await save();renderToday();renderGym()}};
+$('exList').onchange=async e=>{const key=e.target.dataset.w;if(!key)return;D.lw=D.lw||{};if(e.target.value)D.lw[key]=e.target.value;else delete D.lw[key];await save()};
+$('gPrev').onclick=()=>{day.setDate(day.getDate()-1);loadDay()};
+$('gNext').onclick=()=>{day.setDate(day.getDate()+1);loadDay()};
 
 // nav & sheets
 function show(pg){document.querySelectorAll('section').forEach(s=>s.hidden=s.id!==pg);document.querySelectorAll('.tabbar button').forEach(b=>b.classList.toggle('on',b.dataset.pg===pg));if(pg==='pgGym')renderGym();if(pg==='pgWeight')renderWeight();window.scrollTo(0,0)}
@@ -526,8 +604,7 @@ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.parentEleme
 
 (async()=>{
  S=await sget('settings',S);custom=await sget('customFoods',[]);weights=await sget('liftWeights',{});bw=(await sget('bodyweight',[])).map(b=>{const t=new Date(b.d);t.setHours(0,0,0,0);return{d:t.getTime(),w:b.w}}).sort((a,b)=>a.d-b.d);adj=await sget('adjLog',[]);
- const g=DAYMAP[new Date().getDay()][1];
- if(g)gymSel=g;else{for(let i=1;i<7;i++){const n=DAYMAP[(new Date().getDay()+i)%7][1];if(n){gymSel=n;break}}}
+ if(Object.keys(weights).some(k=>/^(u1|u2|l1|l2)\d+$/.test(k))){const nw={};for(const [k,v] of Object.entries(weights)){const m=k.match(/^(u1|u2|l1|l2)(\d+)$/);if(m&&v){const ex=GYM[m[1]].ex[+m[2]];if(ex)nw[m[1]+':'+ex[1]]=v}else if(!m)nw[k]=v}weights=nw;await sset('liftWeights',weights)}
  await loadDay();
  syncNow();
 })();
