@@ -130,6 +130,12 @@ select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border
 .more div{display:flex;gap:6px}
 #syncVeil{position:fixed;inset:0;background:rgba(20,30,40,.35);z-index:9;display:none;align-items:flex-start;justify-content:center;padding-top:calc(env(safe-area-inset-top) + 10px)}
 #syncVeil span{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 16px;font-size:13px;color:var(--cal)}
+.bopt{background:var(--bg);border-radius:12px;padding:10px 12px;margin-bottom:10px}
+.bopt b{display:block;font-size:15px;margin-bottom:4px;color:var(--pro)}
+.bopt .ft{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.meal.chosen{border-right:4px solid var(--cal)}
+.pin{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--chalk);margin:6px 0 12px}
+.pin input{width:18px;height:18px;margin:0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -225,6 +231,14 @@ select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border
    <div class="grid2"><input id="cCal" type="number" inputmode="numeric" placeholder="سعرات"><input id="cPro" type="number" inputmode="numeric" placeholder="بروتين (جم)"></div>
    <button class="primary" id="saveCustom">سجّل واحفظ</button>
   </div>
+ </div></div>
+
+<div id="boredSheet"><div class="sheet-bg" data-close></div>
+ <div class="sheet" role="dialog" aria-label="وجبات بديلة">
+  <h3 id="boredTitle"></h3><p class="hint" id="boredSub" style="margin-top:-6px"></p>
+  <div id="boredList"></div>
+  <label class="pin"><input type="checkbox" id="boredPin"> ثبّت اختياري في الوجبة دي كل يوم زي النهارده</label>
+  <button class="primary" id="boredMore">مش عاجباني، هات غيرهم</button>
  </div></div>
 
 <div id="setSheet"><div class="sheet-bg" data-close></div>
@@ -416,7 +430,105 @@ const compId=(mi,ci,def)=>D.sw[mi+'-'+ci]||def;
 const save=()=>sset(dkey(day),D);
 
 async function loadDay(){D=await sget(dkey(day),{sw:{},eat:{},ex:[]});D.alt=D.alt||{};renderToday();if(!$('pgGym').hidden)renderGym()}
-function mealTotals(mi){const al=D.alt[mi];if(al&&al.length)return al.reduce((a,x)=>({c:a.c+x.c,p:a.p+x.p}),{c:0,p:0});return plan()[mi][2].reduce((a,[cat,def],ci)=>{const x=item(cat,compId(mi,ci,def));return{c:a.c+x.c,p:a.p+x.p}},{c:0,p:0})}
+function mealTotals(mi){const al=D.alt[mi];if(al&&al.length)return al.reduce((a,x)=>({c:a.c+x.c,p:a.p+x.p}),{c:0,p:0});const cm=chosenMeal(mi);if(cm)return{c:cm.c,p:cm.p};return plan()[mi][2].reduce((a,[cat,def],ci)=>{const x=item(cat,compId(mi,ci,def));return{c:a.c+x.c,p:a.p+x.p}},{c:0,p:0})}
+// ---------- زهقت: وجبات بديلة بنفس السعرات والبروتين ----------
+const INGMAP=Object.fromEntries(ING.map(x=>[x[0],x]));
+// [اسم الوجبة، [[المكوّن، جرامات، دور]]]  الدور: p بروتين، c نشويات (بتتظبط على السعرات)، f دهون، v خضار
+const MEALT={
+ BF:[
+  ['فول بزيت الزيتون وجبنة قريش',[['فول مدمس سادة',200,'p'],['زيت (أي نوع)',10,'f'],['عيش بلدي',100,'c'],['جبنة قريش',100,'p'],['طماطم',120,'v']]],
+  ['أومليت بالبسطرمة',[['بيض أومليت أو مقلي',165,'p'],['بسطرمة',30,'p'],['عيش بلدي',100,'c'],['خيار',100,'v']]],
+  ['شكشوكة بالجبنة الفيتا',[['بيض أومليت أو مقلي',165,'p'],['طماطم',150,'v'],['جبنة فيتا',40,'p'],['عيش بلدي',100,'c']]],
+  ['شوفان بالبروتين والموز',[['شوفان',70,'c'],['لبن كامل الدسم',250,'p'],['واي بروتين',30,'p'],['موز',120,'c']]],
+  ['زبادي يوناني بالشوفان واللوز',[['زبادي يوناني',340,'p'],['شوفان',50,'c'],['موز',120,'c'],['عسل',21,'c'],['لوز',15,'f']]],
+  ['ساندوتشات قريش وتونة',[['عيش شامي',120,'c'],['جبنة قريش',150,'p'],['تونة مصفاة (مية)',60,'p'],['طماطم',120,'v']]],
+  ['طعمية وفول وسلطة',[['طعمية',80,'c'],['فول مدمس سادة',150,'p'],['عيش بلدي',100,'c'],['جبنة قريش',100,'p'],['سلطة خضرا',200,'v']]],
+  ['توست بزبدة الفول السوداني ولبن',[['توست بني',90,'c'],['زبدة فول سوداني',32,'f'],['موز',120,'c'],['لبن كامل الدسم',250,'p'],['زبادي يوناني',170,'p']]],
+  ['بيض وجبنة بيضا وخيار',[['بيض أومليت أو مقلي',110,'p'],['جبنة بيضا (دمياطي)',60,'p'],['عيش بلدي',100,'c'],['خيار',100,'v']]],
+  ['لبنة وبيض بالزعتر',[['لبنة',100,'p'],['بيض أومليت أو مقلي',110,'p'],['زيت (أي نوع)',7,'f'],['عيش شامي',120,'c'],['طماطم',120,'v']]],
+  ['كورن فليكس بلبن وزبادي',[['كورن فليكس',60,'c'],['لبن كامل الدسم',300,'p'],['زبادي يوناني',170,'p'],['موز',120,'c']]],
+  ['بانكيك شوفان وبياض بيض',[['شوفان',60,'c'],['بياض بيض',132,'p'],['بيض أومليت أو مقلي',55,'p'],['موز',120,'c'],['عسل',21,'c']]],
+  ['ساندوتش بيض ولانشون',[['بيض أومليت أو مقلي',110,'p'],['لانشون',45,'p'],['عيش فينو',100,'c'],['جبنة رومي',15,'p'],['خيار',100,'v']]]],
+ MAIN:[
+  ['فراخ مشوية ورز وسلطة',[['صدور فراخ مشوية',150,'p'],['رز أبيض مطبوخ',240,'c'],['سلطة خضرا',200,'v'],['زيت (أي نوع)',7,'f']]],
+  ['كفتة وبطاطس فرن',[['كفتة مشوية',150,'p'],['بطاطس مسلوقة أو فرن',300,'c'],['سلطة خضرا',200,'v']]],
+  ['سمك بلطي مشوي ورز',[['سمك بلطي مشوي',250,'p'],['رز أبيض مطبوخ',240,'c'],['سلطة خضرا',200,'v'],['طحينة',15,'f']]],
+  ['مكرونة بالتونة والطماطم',[['مكرونة مطبوخة',280,'c'],['تونة مصفاة (مية)',120,'p'],['طماطم',100,'v'],['زيت (أي نوع)',7,'f']]],
+  ['مكرونة باللحمة المفرومة',[['لحمة مفرومة مطبوخة',120,'p'],['مكرونة مطبوخة',280,'c'],['طماطم',100,'v']]],
+  ['شاورما فراخ بيتي',[['صدور فراخ مشوية',150,'p'],['عيش شامي',120,'c'],['طحينة',15,'f'],['خيار',100,'v'],['طماطم',100,'v']]],
+  ['فراخ بانيه وبطاطس',[['فراخ بانيه',150,'p'],['بطاطس مسلوقة أو فرن',250,'c'],['سلطة خضرا',200,'v']]],
+  ['كبدة إسكندراني وعيش',[['كبدة إسكندراني',150,'p'],['عيش بلدي',150,'c'],['طحينة',15,'f'],['سلطة خضرا',200,'v']]],
+  ['فريك بوراك الفراخ',[['وراك فراخ مشوية',150,'p'],['فريك مطبوخ',250,'c'],['سلطة خضرا',200,'v']]],
+  ['جمبري ورز',[['جمبري',200,'p'],['رز أبيض مطبوخ',240,'c'],['زيت (أي نوع)',10,'f'],['سلطة خضرا',200,'v']]],
+  ['لحمة مشوية وبطاطا',[['لحمة بقري مشوية',150,'p'],['بطاطا',300,'c'],['سلطة خضرا',200,'v']]],
+  ['بول فراخ بالحمص والرز',[['صدور فراخ مشوية',130,'p'],['حمص مطبوخ',120,'c'],['رز أبيض مطبوخ',160,'c'],['سلطة خضرا',200,'v']]],
+  ['برغل بالفراخ والزبادي',[['صدور فراخ مشوية',150,'p'],['برغل مطبوخ',300,'c'],['زبادي',170,'p'],['سلطة خضرا',200,'v']]],
+  ['ساندوتشات كفتة بالطحينة',[['كفتة مشوية',150,'p'],['عيش فينو',150,'c'],['طحينة',15,'f'],['سلطة خضرا',200,'v']]],
+  ['عدس بالفراخ والعيش',[['عدس مطبوخ',250,'c'],['صدور فراخ مشوية',100,'p'],['عيش بلدي',50,'c'],['سلطة خضرا',200,'v']]]],
+ SN:[
+  ['زبادي يوناني بالموز والعسل',[['زبادي يوناني',340,'p'],['موز',120,'c'],['عسل',21,'c'],['لوز',20,'f']]],
+  ['فينو بجبنة رومي وتفاحة',[['عيش فينو',100,'c'],['جبنة رومي',45,'p'],['تفاح',180,'c']]],
+  ['شيك واي بالفول السوداني',[['واي بروتين',30,'p'],['لبن كامل الدسم',250,'p'],['موز',120,'c'],['فول سوداني',30,'f']]],
+  ['تونة على عيش شامي',[['تونة مصفاة (مية)',120,'p'],['عيش شامي',120,'c'],['خيار',100,'v']]],
+  ['قريش بالعسل وتوست وتمر',[['جبنة قريش',200,'p'],['عسل',21,'c'],['توست بني',60,'c'],['تمر',24,'c']]],
+  ['لبن وتمر ومكسرات',[['لبن كامل الدسم',300,'p'],['تمر',40,'c'],['عين جمل',20,'f'],['زبادي يوناني',170,'p']]],
+  ['كورن فليكس بلبن',[['كورن فليكس',60,'c'],['لبن كامل الدسم',300,'p'],['موز',120,'c']]],
+  ['ساندوتش زبدة فول سوداني وموز',[['توست بني',60,'c'],['زبدة فول سوداني',32,'f'],['موز',120,'c'],['لبن كامل الدسم',250,'p']]],
+  ['تفاح بزبدة الفول السوداني وزبادي',[['تفاح',180,'c'],['زبدة فول سوداني',32,'f'],['زبادي يوناني',340,'p']]],
+  ['ساندوتش بيض وجبنة',[['بيض أومليت أو مقلي',110,'p'],['جبنة رومي',15,'p'],['عيش فينو',100,'c']]]],
+ PRE:[
+  ['موز وتمر وزبادي',[['موز',120,'c'],['تمر',24,'c'],['زبادي',170,'p']]],
+  ['فينو بالعسل والقريش',[['عيش فينو',50,'c'],['عسل',21,'c'],['جبنة قريش',100,'p']]],
+  ['شوفان سريع بالموز',[['شوفان',40,'c'],['لبن كامل الدسم',200,'p'],['موز',120,'c']]],
+  ['توست بزبدة فول سوداني وموز',[['توست بني',60,'c'],['زبدة فول سوداني',16,'f'],['موز',120,'c']]],
+  ['مانجا وزبادي يوناني',[['مانجا',200,'c'],['زبادي يوناني',170,'p']]],
+  ['بطاطا مسلوقة وزبادي يوناني',[['بطاطا',200,'c'],['زبادي يوناني',170,'p']]],
+  ['تمر ولبن',[['تمر',40,'c'],['لبن كامل الدسم',250,'p']]],
+  ['ساندوتش جبنة رومي صغير وتفاحة',[['عيش فينو',50,'c'],['جبنة رومي',30,'p'],['تفاح',180,'c']]]],
+ NIGHT:[
+  ['زبادي يوناني بالمكسرات',[['زبادي يوناني',340,'p'],['لوز',20,'f'],['عسل',10,'c']]],
+  ['جبنة قريش وخيار ونص رغيف',[['جبنة قريش',150,'p'],['خيار',100,'v'],['عيش بلدي',50,'c']]],
+  ['لبن بالشوفان',[['لبن كامل الدسم',300,'p'],['شوفان',40,'c'],['زبادي يوناني',170,'p']]],
+  ['سلطة تونة وعيش شامي',[['تونة مصفاة (مية)',120,'p'],['سلطة خضرا',200,'v'],['عيش شامي',60,'c']]],
+  ['أومليت وجبنة رومي وتوست',[['بيض أومليت أو مقلي',110,'p'],['جبنة رومي',15,'p'],['توست بني',60,'c']]],
+  ['شوربة عدس وعيش',[['شوربة عدس',300,'c'],['عيش بلدي',50,'c'],['زبادي',170,'p']]],
+  ['فول وعيش وسلطة',[['فول مدمس سادة',200,'p'],['عيش بلدي',100,'c'],['سلطة خضرا',200,'v']]],
+  ['زبادي وتفاح وزبدة فول سوداني',[['زبادي يوناني',170,'p'],['تفاح',180,'c'],['زبدة فول سوداني',16,'f']]],
+  ['لبنة وخيار وعيش شامي',[['لبنة',100,'p'],['خيار',100,'v'],['عيش شامي',60,'c'],['جبنة قريش',100,'p']]],
+  ['فراخ وخضار سوتيه',[['صدور فراخ مشوية',120,'p'],['سلطة خضرا',200,'v'],['زيت (أي نوع)',7,'f'],['عيش شامي',60,'c']]]]
+};
+const MEALTYPE={'فطار':'BF','غدا':'MAIN','بعد التمرين':'MAIN','سناك':'SN','زيادة التضخيم':'SN','قبل التمرين':'PRE','عشا':'NIGHT','قبل النوم':'NIGHT'};
+const mealType=mi=>{const m=plan()[mi];const t=MEALTYPE[m[1]]||'SN';if(t==='NIGHT'){const c=planTotals(mi).c;return c>450?'MAIN':'NIGHT'}return t};
+const UNITS_OK=['رغيف','كوب','علبة','موزة','تفاحة','برتقانة','طبق','خيارة','طماطماية','كوباية'];
+function fmtAmt(ing,g){const u=ing[3],ug=ing[4];if(u&&ug&&(ug<=60||UNITS_OK.includes(u))){const n=ug<=20?Math.max(1,Math.round(g/ug)):Math.max(0.5,Math.round(g/ug*2)/2);return{g:n*ug,t:`${ar(n)} ${u}`}}const gg=Math.max(5,Math.round(g/(g<40?5:10))*(g<40?5:10));return{g:gg,t:`${ar(gg)} جم`}}
+// بيظبط الكميات عشان الوجبة توصل لنفس السعرات والبروتين
+function buildMeal(tpl,tK,tP){
+ let it=tpl[1].map(([n,g,r])=>({ing:INGMAP[n],g,r})).filter(x=>x.ing);
+ const tot=()=>it.reduce((a,x)=>({c:a.c+x.ing[1]*x.g/100,p:a.p+x.ing[2]*x.g/100}),{c:0,p:0});
+ const scale=(roles,f,lo,hi)=>it.forEach(x=>{if(roles.includes(x.r))x.g*=Math.min(hi,Math.max(lo,f))});
+ let t=tot();scale('pcf',tK/Math.max(1,t.c),0.5,2);
+ t=tot();if(t.p<tP*0.92){const pp=it.filter(x=>x.r==='p').reduce((a,x)=>a+x.ing[2]*x.g/100,0);if(pp>0)scale('p',1+(tP-t.p)/pp,1,1.5)}
+ for(let k=0;k<3;k++){t=tot();const cc=it.filter(x=>x.r==='c').reduce((a,x)=>a+x.ing[1]*x.g/100,0);if(cc>0)scale('c',1+(tK-t.c)/cc,0.35,2.2)}
+ it=it.map(x=>{const a=fmtAmt(x.ing,x.g);return{n:x.ing[0],q:a.t,c:x.ing[1]*a.g/100,p:x.ing[2]*a.g/100}});
+ t=it.reduce((a,x)=>({c:a.c+x.c,p:a.p+x.p}),{c:0,p:0});
+ return{name:tpl[0],items:it,c:t.c,p:t.p,ok:Math.abs(t.c-tK)<=Math.max(60,tK*0.12)&&t.p>=tP*0.8}}
+function planTotals(mi){return plan()[mi][2].reduce((a,[cat,def],ci)=>{const x=item(cat,compId(mi,ci,def));return{c:a.c+x.c,p:a.p+x.p}},{c:0,p:0})}
+const pinKey=mi=>DAYMAP[day.getDay()][0]+':'+mi;
+function chosenMeal(mi){const ch=(D.cm&&D.cm[mi])||(S.pins&&S.pins[pinKey(mi)]);if(!ch)return null;
+ const tpl=(MEALT[ch.type]||[]).find(x=>x[0]===ch.name);if(!tpl)return null;const tg=planTotals(mi);const b=buildMeal(tpl,tg.c,tg.p);b.pinned=!(D.cm&&D.cm[mi]);b.type=ch.type;return b}
+let bored={mi:null,seen:new Set(),opts:[]};
+function genOptions(mi){const type=mealType(mi),tg=planTotals(mi),cur=chosenMeal(mi);
+ let pool=MEALT[type].filter(t=>!bored.seen.has(t[0])&&(!cur||t[0]!==cur.name));
+ if(pool.length<3){bored.seen=new Set(cur?[cur.name]:[]);pool=MEALT[type].filter(t=>!cur||t[0]!==cur.name)}
+ pool=pool.slice().sort(()=>Math.random()-0.5);const out=[];
+ for(const t of pool){const b=buildMeal(t,tg.c,tg.p);if(b.ok){out.push(b);bored.seen.add(t[0])}if(out.length===3)break}
+ bored.opts=out.map(o=>({...o,type}));return{tg,type}}
+function renderBored(){const mi=bored.mi,{tg}=bored.last;
+ $('boredTitle').textContent=`${plan()[mi][1]} تاني بنفس السعرات`;
+ $('boredSub').textContent=`الهدف: حوالي ${ar(Math.round(tg.c))} سعر و${ar(Math.round(tg.p))} جم بروتين`;
+ $('boredList').innerHTML=bored.opts.length?bored.opts.map((o,i)=>`<div class="bopt"><b>${o.name}</b>${o.items.map(x=>`<div class="bi"><div class="n">${x.n}</div><small>${x.q}</small></div>`).join('')}<div class="ft"><span class="k">${ar(Math.round(o.c))} سعر · ${ar(r1(o.p))} جم بروتين</span><button class="ate" data-pick="${i}">اختارها</button></div></div>`).join(''):'<p class="hint">مفيش اختيارات تانية مناسبة دلوقتي.</p>'}
+function openBored(mi){bored.mi=mi;if(bored.lastMi!==mi){bored.seen=new Set();bored.lastMi=mi}bored.last=genOptions(mi);$('boredPin').checked=false;renderBored();open('boredSheet')}
+
 function renderToday(){
  const today=new Date().toDateString()===day.toDateString();
  $('date').innerHTML=(today?'النهارده':day.toLocaleDateString('ar-EG',{weekday:'long'}))+'<small>'+day.toLocaleDateString('ar-EG',{weekday:today?'long':undefined,day:'numeric',month:'long'})+'</small>';
@@ -442,9 +554,14 @@ function renderToday(){
   if(al&&al.length) return `<div class="meal alt">${hd}<div class="altlbl">كلت بدل البرنامج:</div>`+
    al.map((x,k)=>`<div class="comp"><div class="n">${x.n}<small>${x.q} · ${ar(Math.round(x.c))} سعر</small></div><button class="del" data-ad="${mi}-${k}" aria-label="امسح">×</button></div>`).join('')+
    `<div class="ft"><span class="k">${ar(Math.round(t.c))} سعر · ${ar(r1(t.p))} جم بروتين</span><span><button class="other" data-other="${mi}">+ صنف</button> <button class="other" data-reset="${mi}">رجّع للبرنامج</button></span></div></div>`;
+  const cm=chosenMeal(mi);
+  if(cm) return `<div class="meal chosen ${D.eat[mi]?'done':''}">${hd}<div class="altlbl">${cm.name}${cm.pinned?' · متثبّتة':''}</div>`+
+   cm.items.map(x=>`<div class="comp"><div class="n">${x.n}<small>${x.q} · ${ar(Math.round(x.c))} سعر</small></div></div>`).join('')+
+   `<div class="ft"><span class="k">${ar(Math.round(t.c))} سعر · ${ar(r1(t.p))} جم بروتين</span><span><button class="other" data-bored="${mi}">زهقت</button> <button class="other" data-orig="${mi}">الأصلي</button> <button class="ate" data-eat="${mi}">${D.eat[mi]?'كلتها ✓':'كلتها'}</button></span></div>`+
+   `<button class="link" data-other="${mi}" style="margin:6px 0 0;font-size:12px">كلت حاجة تانية خالص</button></div>`;
   return `<div class="meal ${D.eat[mi]?'done':''}">${hd}`+
    m[2].map(([cat,def],ci)=>{const x=item(cat,compId(mi,ci,def));return `<div class="comp"><div class="n">${x.n}<small>${ar(x.c)} سعر</small></div><button class="swap" data-sw="${mi}-${ci}">بدّل</button></div>`}).join('')+
-   `<div class="ft"><span class="k">${ar(t.c)} سعر · ${ar(t.p)} جم بروتين</span><span><button class="other" data-other="${mi}">كلت حاجة تانية</button> <button class="ate" data-eat="${mi}">${D.eat[mi]?'كلتها ✓':'كلتها'}</button></span></div></div>`;
+   `<div class="ft"><span class="k">${ar(t.c)} سعر · ${ar(t.p)} جم بروتين</span><span><button class="other" data-bored="${mi}">زهقت</button> <button class="other" data-other="${mi}">كلت حاجة تانية</button> <button class="ate" data-eat="${mi}">${D.eat[mi]?'كلتها ✓':'كلتها'}</button></span></div></div>`;
  }).join('');
  $('extras').innerHTML=D.ex.length?D.ex.map((e,i)=>`<div class="extra"><div class="n">${e.n}<small>${e.q} · ${ar(e.p)} جم بروتين</small></div><div class="k">${ar(e.c)}</div><button class="del" data-del="${i}" aria-label="امسح">×</button></div>`).join(''):'';
 }
@@ -453,6 +570,8 @@ $('meals').onclick=async e=>{
  if(t.dataset.eat!==undefined){const mi=t.dataset.eat;D.eat[mi]=!D.eat[mi];await save();renderToday()}
  if(t.dataset.sw){const [mi,ci]=t.dataset.sw.split('-').map(Number);openSwap(mi,ci)}
  if(t.dataset.other!==undefined)openAddFor(+t.dataset.other);
+ if(t.dataset.bored!==undefined)openBored(+t.dataset.bored);
+ if(t.dataset.orig!==undefined){const mi=+t.dataset.orig;D.cm=D.cm||{};if(D.cm[mi])delete D.cm[mi];if(S.pins&&S.pins[pinKey(mi)]){delete S.pins[pinKey(mi)];await sset('settings',S)}await save();renderToday()}
  if(t.dataset.reset!==undefined){const mi=+t.dataset.reset;delete D.alt[mi];D.eat[mi]=false;await save();renderToday()}
  if(t.dataset.ad){const [mi,k]=t.dataset.ad.split('-').map(Number);D.alt[mi].splice(k,1);if(!D.alt[mi].length){delete D.alt[mi];D.eat[mi]=false}await save();renderToday()}
 };
@@ -561,6 +680,11 @@ $('syConnect').onclick=async()=>{const url=$('syUrl').value.trim(),token=$('syTo
 $('syNow').onclick=()=>syncNow({veil:true});
 $('syOff').onclick=()=>{localStorage.removeItem('syncCfg');lastSync=null;setSyncTxt()};
 $('saveSet').onclick=async()=>{const nc=+$('tCal').value||2800;S={...S,calAt:nc!==S.cal?Date.now():(S.calAt||0),cal:nc,pro:+$('tPro').value||145,start:$('tStart').value||DEF_START};await sset('settings',S);close('setSheet');renderToday()};
+
+$('boredMore').onclick=()=>{bored.last=genOptions(bored.mi);renderBored();$('boredList').scrollTop=0};
+$('boredList').onclick=async e=>{const i=e.target.dataset.pick;if(i===undefined)return;const o=bored.opts[+i],mi=bored.mi,ch={type:o.type,name:o.name};
+ if($('boredPin').checked){S.pins=S.pins||{};S.pins[pinKey(mi)]=ch;await sset('settings',S);if(D.cm)delete D.cm[mi]}else{D.cm=D.cm||{};D.cm[mi]=ch}
+ await save();close('boredSheet');renderToday()};
 
 // weight
 let adj=[];
