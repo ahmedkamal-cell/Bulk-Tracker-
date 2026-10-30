@@ -235,17 +235,18 @@ select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border
   <label>لينك الـ script</label><input id="syUrl" placeholder="https://script.google.com/macros/s/.../exec" dir="ltr">
   <label>كلمة السر</label><input id="syTok" dir="ltr">
   <div class="grid2"><button class="primary" id="syConnect">اربط واعمل مزامنة</button><button class="other" id="syOff" style="margin-bottom:10px">افصل</button></div>
+  <button class="other" id="syNow" style="width:100%;margin-bottom:6px">اعمل مزامنة دلوقتي</button>
   <p class="hint" id="syncTxt" style="margin-top:4px"></p>
  </div></div>
 
 <script>
 const CAT={
- BF:{t:'فطار',i:{ful:['فول بالزيت + رغيف بلدي + 100 جم قريش',690,36],oml:['أومليت 3 بيض + رغيف بلدي + 30 جم رومي',655,36],oat:['80 جم شوفان باللبن + موزة + معلقة زبدة فول سوداني + زبادي يوناني',755,39],tam:['4 طعمية + رغيف بلدي + 100 جم قريش + سلطة',630,25]}},
+ BF:{t:'فطار',i:{fulH:['فول بالزيت + نص رغيف + 100 جم قريش',565,32],omlH:['أومليت 3 بيض + نص رغيف + 30 جم رومي',530,32],ful:['فول بالزيت + رغيف بلدي + 100 جم قريش',690,36],oml:['أومليت 3 بيض + رغيف بلدي + 30 جم رومي',655,36],oat:['80 جم شوفان باللبن + موزة + معلقة زبدة فول سوداني + زبادي يوناني',755,39],tam:['4 طعمية + رغيف بلدي + 100 جم قريش + سلطة',630,25]}},
  P:{t:'بروتين',i:{chk:['صدور فراخ 150 جم',250,47],thi:['وراك فراخ من غير جلد 150 جم',270,39],bef:['لحمة مشوية 150 جم',375,39],kof:['كفتة 150 جم',420,30],fsh:['سمك مشوي 200 جم',260,52],tun:['علبة تونة مصفاة',140,30],tue:['علبة تونة + بيضة أومليت',230,36]}},
- C:{t:'نشويات',i:{r15:['1.5 كوب رز',310,6],p15:['1.5 كوب مكرونة',330,12],r2:['2 كوب رز',410,8],p2:['2 كوب مكرونة',440,16],bl:['رغيف بلدي وربع',310,11],pot:['350 جم بطاطس مسلوقة أو فرن',305,7]}},
+ C:{t:'نشويات',i:{r1:['1 كوب رز',205,4],p1:['1 كوب مكرونة',220,8],bl1:['رغيف بلدي',250,9],pot2:['250 جم بطاطس مسلوقة أو فرن',220,5],r15:['1.5 كوب رز',310,6],p15:['1.5 كوب مكرونة',330,12],r2:['2 كوب رز',410,8],p2:['2 كوب مكرونة',440,16],bl:['رغيف بلدي وربع',310,11],pot:['350 جم بطاطس مسلوقة أو فرن',305,7]}},
  S:{t:'جنب',i:{so:['سلطة بمعلقة زيت زيتون',160,1],s:['سلطة خضرا',40,1],nut:['حفنة مكسرات 30 جم',175,5],pb:['معلقة زبدة فول سوداني',95,4]}},
- SN:{t:'سناك',i:{shk:['شيك التضخيم (لبن + موزة + 50 جم شوفان + زبدة فول سوداني)',545,20],gy:['زبادي يوناني + 50 جم شوفان + موزة + معلقة عسل',460,24],fin:['2 فينو بجبنة رومي + موزة',635,27]}},
- PRE:{t:'قبل التمرين',i:{yd:['زبادي + موزة + 3 تمرات',280,7],ft:['رغيف فينو + نص علبة تونة + موزة',325,21],bn:['2 موز + 3 تمرات',280,3],shk:['شيك التضخيم',545,20]}},
+ SN:{t:'سناك',i:{shkL:['شيك خفيف (لبن + موزة + 25 جم شوفان)',355,15],shk:['شيك التضخيم (لبن + موزة + 50 جم شوفان + زبدة فول سوداني)',545,20],gy:['زبادي يوناني + 50 جم شوفان + موزة + معلقة عسل',460,24],fin:['2 فينو بجبنة رومي + موزة',635,27]}},
+ PRE:{t:'قبل التمرين',i:{shkL:['شيك خفيف (لبن + موزة + 25 جم شوفان)',355,15],yd:['زبادي + موزة + 3 تمرات',280,7],ft:['رغيف فينو + نص علبة تونة + موزة',325,21],bn:['2 موز + 3 تمرات',280,3],shk:['شيك التضخيم',545,20]}},
  B:{t:'زيادة',i:{pbb:['نص رغيف بلدي + معلقة زبدة فول سوداني',220,8],nb:['حفنة مكسرات + موزة',280,6],md:['كوباية لبن + 3 تمرات',225,9],gyh:['زبادي يوناني + معلقة عسل',165,15],ob:['معلقة زيت زيتون على الأكل + نص رغيف',245,4]}},
  N:{t:'عشا خفيف',i:{yq:['زبادي + 100 جم قريش',205,19],yqn:['زبادي + 100 جم قريش + حفنة مكسرات',380,24],yqb:['زبادي + 100 جم قريش + نص رغيف + حفنة مكسرات',505,28],gyb:['زبادي يوناني + موزة',205,16],len:['طبق عدس + رغيف بلدي + سلطة',520,23],ful:['طبق فول + رغيف بلدي + سلطة',530,23]}}
 };
@@ -343,7 +344,7 @@ async function syncNow(reload=true){
  const cfg=syncCfg();if(!cfg||syncing)return;syncing=true;setSyncTxt('بيعمل مزامنة...');
  try{
   const r=await fetch(cfg.url+'?token='+encodeURIComponent(cfg.token));const j=await r.json();
-  if(j.error)throw new Error(j.error==='token'?'كلمة السر غلط':j.error);
+  if(j.error)throw new Error(j.error==='token'?'كلمة السر مش زي اللي في الـ Script':j.error);
   const cloud=j.data||{},ts=getTs();let changed=false;
   for(const [k,o] of Object.entries(cloud)){if(!SYNC_KEYS(k))continue;if((+o.t||0)>(ts[k]||0)){localStorage.setItem(k,o.v);ts[k]=+o.t;changed=true}}
   setTs(ts);
@@ -353,7 +354,7 @@ async function syncNow(reload=true){
   if(items.length){const pr=await fetch(cfg.url,{method:'POST',body:JSON.stringify({token:cfg.token,items})});const pj=await pr.json();if(pj.error)throw new Error(pj.error)}
   lastSync=new Date();syncErr='';
   if(changed&&reload)await reloadState();
- }catch(e){syncErr=e.message||'مش قادر أوصل'}
+ }catch(e){syncErr=(e instanceof SyntaxError)?'اللينك بيرجّع صفحة تسجيل دخول، اتأكد إن Who has access = Anyone':(e.message==='Failed to fetch'||e.message==='Load failed')?'مش قادر أوصل للينك، اتأكد إنه صح وبينتهي بـ /exec':(e.message||'مش قادر أوصل')}
  syncing=false;setSyncTxt();
 }
 function setSyncTxt(t){const el=document.getElementById('syncTxt');if(!el)return;const cfg=syncCfg();
@@ -365,9 +366,19 @@ async function reloadState(){
  if(!$('pgGym').hidden)renderGym();if(!$('pgWeight').hidden)renderWeight();
 }
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow()});
+window.addEventListener('focus',()=>syncNow());window.addEventListener('pageshow',()=>syncNow());
+setInterval(()=>{if(document.visibilityState==='visible')syncNow()},45000);
 const BASE_CAL=2800,DAY=864e5;
 const steps=()=>Math.round(((S.cal||BASE_CAL)-BASE_CAL)/200);
-function plan(){const p=PLANS[DAYMAP[day.getDay()][0]],k=steps();if(k<=0)return p;const ids=Object.keys(CAT.B.i);
+// لما الهدف يقل: كل 200 سعر بتخفّف مرحلة من البرنامج
+const LIGHT=[{t:'شيك أخف',m:{SN:{shk:'shkL'},PRE:{shk:'shkL'}}},
+ {t:'نشويات أقل في الغدا والعشا',m:{C:{r15:'r1',p2:'p15',r2:'r15',p15:'p1',bl:'bl1',pot:'pot2'}}},
+ {t:'سلطة من غير زيت ومكسرات أقل بالليل',m:{S:{so:'s'},N:{yqb:'yqn',yqn:'yq'}}},
+ {t:'نص رغيف في الفطار',m:{BF:{ful:'fulH',oml:'omlH'}}}];
+function plan(){const p=PLANS[DAYMAP[day.getDay()][0]],k=steps();
+ if(k<0){const st=LIGHT.slice(0,Math.min(-k,LIGHT.length));
+  return p.map(m=>[m[0],m[1],m[2].map(([cat,id])=>{let n=id;st.forEach(L=>{const mm=L.m[cat];if(mm&&mm[n])n=mm[n]});return[cat,n]})])}
+ if(k===0)return p;const ids=Object.keys(CAT.B.i);
  return [...p,['في أي وقت','زيادة التضخيم',Array.from({length:Math.min(k,6)},(_,i)=>['B',ids[i%ids.length]])]]}
 const item=(cat,id)=>{const x=CAT[cat].i[id];return{n:x[0],c:x[1],p:x[2]}};
 const compId=(mi,ci,def)=>D.sw[mi+'-'+ci]||def;
@@ -393,7 +404,7 @@ function renderToday(){
  else if(ss.status==='missed'){gd.className='gymday rest';gd.innerHTML='<div><b>فوّت تمرين النهارده</b><small>اترحل لأول يوم تمرين جاي</small></div><span>‹</span>';gd.onclick=()=>show('pgGym')}
  else if(ss.missed>0&&ss.g){gd.className='gymday';gd.innerHTML=`<div><b>عندك تمرين متأجل: ${GYM[ss.g].t}</b><small>تقدر تعوّضه النهارده من تاب التمرين</small></div><span>‹</span>`;gd.onclick=()=>show('pgGym')}
  else{gd.className='gymday rest';gd.innerHTML='<div><b>يوم راحة</b><small>الأكل مهم النهارده زي أيام التمرين</small></div>';gd.onclick=null}
- const k=steps();$('planNote').innerHTML=k<0?`<div class="note">الهدف اتقلل ${ar(-k*200)} سعر عشان وزنك بيزيد أسرع من المطلوب. قلّل من النشويات حوالي ${ar(-k*0.5)} كوب رز أو مكرونة في اليوم.</div>`:'';
+ const k=steps();$('planNote').innerHTML=k<0?`<div class="note">البرنامج اتخفّف ${ar(-k*200)} سعر عشان وزنك بيزيد أسرع من المطلوب: ${LIGHT.slice(0,Math.min(-k,LIGHT.length)).map(L=>L.t).join('، ')}.</div>`:'';
  $('meals').innerHTML=plan().map((m,mi)=>{
   const t=mealTotals(mi),al=D.alt[mi];
   const hd=`<div class="hd"><b>${m[1]}</b><span>${m[0]}</span></div>`;
@@ -516,6 +527,7 @@ $('syConnect').onclick=async()=>{const url=$('syUrl').value.trim(),token=$('syTo
  if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)){setSyncTxt('اللينك لازم يبدأ بـ https://script.google.com وينتهي بـ /exec');return}
  if(!token){$('syTok').focus();return}
  localStorage.setItem('syncCfg',JSON.stringify({url,token}));syncErr='';await syncNow(true)};
+$('syNow').onclick=()=>syncNow(true);
 $('syOff').onclick=()=>{localStorage.removeItem('syncCfg');lastSync=null;setSyncTxt()};
 $('saveSet').onclick=async()=>{S={...S,cal:+$('tCal').value||2800,pro:+$('tPro').value||145,start:$('tStart').value||DEF_START};await sset('settings',S);close('setSheet');renderToday()};
 
