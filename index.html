@@ -371,6 +371,9 @@ function mergeVal(k,l,c,lt,ct){
  if(k==='bodyweight'){const mp={};(c||[]).forEach(x=>mp[x.d]=x);(l||[]).forEach(x=>mp[x.d]=x);return Object.values(mp).sort((a,b)=>a.d-b.d)}
  if(k==='adjLog'){const mp={};[...(c||[]),...(l||[])].forEach(x=>mp[x.d+':'+x.to]=x);return Object.values(mp).sort((a,b)=>b.d-a.d)}
  if(k==='liftWeights')return{...(c||{}),...(l||{})};
+ if(k==='settings'){l=l||{};c=c||{};const nw=lt>=ct?l:c,od=lt>=ct?c:l;const m={...od,...nw};
+  const man=(l.calAt||0)>=(c.calAt||0)?l:c;m.cal=man.cal??m.cal;m.calAt=man.calAt||0;
+  m.lastAdj=Math.max(l.lastAdj||0,c.lastAdj||0);m.pins={...(od.pins||{}),...(nw.pins||{})};return m}
  return lt>=ct?l:c}
 function showVeil(on){const v=document.getElementById('syncVeil');if(v)v.style.display=on?'flex':'none'}
 async function syncNow(opt={}){
@@ -750,14 +753,15 @@ $('openAdd').onclick=()=>{addFor=null;$('addFor').textContent='بتسجّل في
  resetPick();renderBuild();$('buildFoot').hidden=true;open('addSheet')};
 
 // settings
-$('openSet').onclick=()=>{$('tCal').value=S.cal;$('tPro').value=S.pro;$('tStart').value=S.start||DEF_START;const c=syncCfg();$('syUrl').value=c?c.url:'';$('syTok').value=c?c.token:'';setSyncTxt();open('setSheet')};
+$('openSet').onclick=()=>{calDirty=false;$('tCal').value=S.cal;$('tPro').value=S.pro;$('tStart').value=S.start||DEF_START;const c=syncCfg();$('syUrl').value=c?c.url:'';$('syTok').value=c?c.token:'';setSyncTxt();open('setSheet')};
 $('syConnect').onclick=async()=>{const url=$('syUrl').value.trim(),token=$('syTok').value.trim();
  if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)){setSyncTxt('اللينك لازم يبدأ بـ https://script.google.com وينتهي بـ /exec');return}
  if(!token){$('syTok').focus();return}
  localStorage.setItem('syncCfg',JSON.stringify({url,token}));syncErr='';await syncNow({veil:true})};
 $('syNow').onclick=()=>syncNow({veil:true});
 $('syOff').onclick=()=>{localStorage.removeItem('syncCfg');lastSync=null;setSyncTxt()};
-$('saveSet').onclick=async()=>{const nc=+$('tCal').value||2800;S={...S,calAt:nc!==S.cal?Date.now():(S.calAt||0),cal:nc,pro:+$('tPro').value||145,start:$('tStart').value||DEF_START};await sset('settings',S);close('setSheet');renderToday()};
+let calDirty=false;$('tCal').addEventListener('input',()=>calDirty=true);
+$('saveSet').onclick=async()=>{const nc=+$('tCal').value||2800,man=calDirty&&nc!==S.cal;calDirty=false;S={...S,calAt:man?Date.now():(S.calAt||0),cal:man?nc:S.cal,pro:+$('tPro').value||145,start:$('tStart').value||DEF_START};await sset('settings',S);close('setSheet');renderToday()};
 
 $('boredMore').onclick=()=>{bored.last=genOptions(bored.mi);renderBored();$('boredList').scrollTop=0};
 $('boredList').onclick=async e=>{const i=e.target.dataset.pick;if(i===undefined)return;const o=bored.opts[+i],mi=bored.mi,ch={type:o.type,name:o.name};
@@ -771,11 +775,16 @@ function applyAdj(){const a=adj.slice().sort((x,y)=>(y.at||y.d)-(x.at||x.d))[0];
  if(a&&(a.at||a.d)>(S.calAt||0)&&S.cal!==a.to){S.cal=a.to;S.lastAdj=Math.max(S.lastAdj||0,a.d);return true}return false}
 const dstr=d=>new Date(d).toLocaleDateString('ar-EG',{day:'numeric',month:'long'});
 const sgn=n=>(n>=0?'+':'−')+ar(Math.abs(Math.round(n*100)/100));
-function rateInfo(){if(bw.length<2)return null;const last=bw[bw.length-1];
- for(let i=bw.length-2;i>=0;i--){if(last.d-bw[i].d>=13*DAY){const wk=(last.d-bw[i].d)/(7*DAY);return{rate:(last.w-bw[i].w)/wk}}}
- return{short:true}}
+const lastAdjDate=()=>Math.max(S.lastAdj||0,...adj.map(a=>a.d||0),0);
+// المعدل الأسبوعي: خط اتجاه لكل الأوزان من آخر تعديل (أو آخر 4 أسابيع)، عشان وزنة واحدة متلخبطش الحكم
+function rateInfo(){if(bw.length<2)return null;const last=bw[bw.length-1],la=lastAdjDate();
+ const pts=bw.filter(b=>b.d>=Math.max(last.d-28*DAY,la));
+ if(pts.length<2||last.d-pts[0].d<13*DAY)return{short:true,afterAdj:la>0};
+ const xs=pts.map(b=>b.d/DAY),ys=pts.map(b=>b.w),mx=xs.reduce((a,b)=>a+b)/xs.length,my=ys.reduce((a,b)=>a+b)/ys.length;
+ const sl=xs.reduce((a,x,i)=>a+(x-mx)*(ys[i]-my),0)/xs.reduce((a,x)=>a+(x-mx)**2,0);
+ return{rate:sl*7}}
 async function evaluate(){const r=rateInfo();if(!r||r.short)return;const last=bw[bw.length-1];
- const la=Math.max(S.lastAdj||0,adj[0]?adj[0].d:0);if(la&&last.d-la<13*DAY)return;
+ const la=lastAdjDate();if(la&&last.d-la<13*DAY)return;
  const delta=r.rate<0.25?200:r.rate>0.5?-200:0;if(!delta)return;
  adj.unshift({d:last.d,at:Date.now(),from:S.cal,to:S.cal+delta,rate:r.rate});S.cal+=delta;S.lastAdj=last.d;
  await sset('settings',S);await sset('adjLog',adj)}
@@ -787,7 +796,7 @@ function renderWeight(){
   `<div><b>${ar(S.cal)}</b><small>هدف السعرات دلوقتي</small></div>`;
  const st=$('wstatus');let cls='',html='';
  if(!bw.length)html='<b>ابدأ بوزنك النهارده</b>ده هيبقى نقطة البداية اللي هنقارن بيها.';
- else if(!r||r.short)html='<b>محتاج أسبوعين وزن</b>بعد أسبوعين من أول وزن هنقدر نحكم إذا كنت ماشي صح، ونظبط السعرات لو محتاجة.';
+ else if(r&&r.short&&r.afterAdj)html='<b>الهدف اتعدّل قريب</b>هنستنى أسبوعين وزن من بعد آخر تعديل قبل ما نحكم تاني، عشان الجسم ياخد وقته.';else if(!r||r.short)html='<b>محتاج أسبوعين وزن</b>بعد أسبوعين من أول وزن هنقدر نحكم إذا كنت ماشي صح، ونظبط السعرات لو محتاجة.';
  else{const justAdj=adj[0]&&adj[0].d===last.d;
   if(r.rate<0.25){cls='low';html=`<b>أبطأ من الهدف</b>بتزيد ${ar(Math.round(r.rate*100)/100)} كجم في الأسبوع، والهدف من ربع لنص كيلو. `+(justAdj?`زوّدنا هدفك لـ ${ar(S.cal)} سعر، واتضافت وجبة "زيادة التضخيم" في برنامج الأكل.`:'لو فضل كده في الوزنة الجاية، هنزوّد السعرات تلقائي.')}
   else if(r.rate>0.5){cls='high';html=`<b>أسرع من الهدف</b>بتزيد ${ar(Math.round(r.rate*100)/100)} كجم في الأسبوع، وده ممكن يبقى دهون زيادة. `+(justAdj?`قللنا هدفك لـ ${ar(S.cal)} سعر.`:'لو فضل كده في الوزنة الجاية، هنقلل السعرات تلقائي.')}
