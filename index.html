@@ -254,6 +254,7 @@ select{font-family:inherit;font-size:15px;padding:10px;border-radius:10px;border
   <div class="grid2"><button class="primary" id="syConnect">اربط واعمل مزامنة</button><button class="other" id="syOff" style="margin-bottom:10px">افصل</button></div>
   <button class="other" id="syNow" style="width:100%;margin-bottom:6px">اعمل مزامنة دلوقتي</button>
   <p class="hint" id="syncTxt" style="margin-top:4px"></p>
+  <p class="hint" style="margin-top:14px;text-align:center">نسخة الـ app: <span id="appVer"></span></p>
  </div></div>
 
 <script>
@@ -369,7 +370,7 @@ function mergeVal(k,l,c,lt,ct){
   m.lw={...(c.lw||{}),...(l.lw||{})};m.gs=l.gs!==undefined?l.gs:c.gs;if(m.gs===undefined)delete m.gs;return m}
  if(k==='customFoods'){const a=[...(l||[]),...(c||[])],seen=new Set();return a.filter(x=>!seen.has(x.n)&&seen.add(x.n))}
  if(k==='bodyweight'){const mp={};(c||[]).forEach(x=>mp[x.d]=x);(l||[]).forEach(x=>mp[x.d]=x);return Object.values(mp).sort((a,b)=>a.d-b.d)}
- if(k==='adjLog'){const mp={};[...(c||[]),...(l||[])].forEach(x=>mp[x.d+':'+x.to]=x);return Object.values(mp).sort((a,b)=>b.d-a.d)}
+ if(k==='adjLog'){const mp={};[...(c||[]),...(l||[])].forEach(x=>mp[(x.at||x.d)+':'+x.to+':'+(x.manual?'m':'a')]=x);return Object.values(mp).sort((a,b)=>(b.at||b.d)-(a.at||a.d))}
  if(k==='liftWeights')return{...(c||{}),...(l||{})};
  if(k==='settings'){l=l||{};c=c||{};const nw=lt>=ct?l:c,od=lt>=ct?c:l;const m={...od,...nw};
   const man=(l.calAt||0)>=(c.calAt||0)?l:c;m.cal=man.cal??m.cal;m.calAt=man.calAt||0;
@@ -417,6 +418,7 @@ async function reloadState(){
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow({veil:true});else flushNow()});
 window.addEventListener('pagehide',flushNow);window.addEventListener('pageshow',e=>{if(e.persisted)syncNow({veil:true})});window.addEventListener('focus',()=>syncNow());
 setInterval(()=>{if(document.visibilityState==='visible')syncNow()},45000);
+const APP_VER='19';
 const BASE_CAL=2800,DAY=864e5;
 const steps=()=>Math.round(((S.cal||BASE_CAL)-BASE_CAL)/200);
 // لما الهدف يقل: كل 200 سعر بتخفّف مرحلة من البرنامج
@@ -611,6 +613,7 @@ function renderBored(){const mi=bored.mi,{tg}=bored.last;
 function openBored(mi){bored.mi=mi;if(bored.lastMi!==mi){bored.seen=new Set();bored.lastMi=mi}bored.last=genOptions(mi);$('boredPin').checked=false;renderBored();open('boredSheet')}
 
 function renderToday(){
+ applyAdj();
  const today=new Date().toDateString()===day.toDateString();
  $('date').innerHTML=(today?'النهارده':day.toLocaleDateString('ar-EG',{weekday:'long'}))+'<small>'+day.toLocaleDateString('ar-EG',{weekday:today?'long':undefined,day:'numeric',month:'long'})+'</small>';
  let cal=0,pro=0;
@@ -753,7 +756,7 @@ $('openAdd').onclick=()=>{addFor=null;$('addFor').textContent='بتسجّل في
  resetPick();renderBuild();$('buildFoot').hidden=true;open('addSheet')};
 
 // settings
-$('openSet').onclick=()=>{calDirty=false;$('tCal').value=S.cal;$('tPro').value=S.pro;$('tStart').value=S.start||DEF_START;const c=syncCfg();$('syUrl').value=c?c.url:'';$('syTok').value=c?c.token:'';setSyncTxt();open('setSheet')};
+$('openSet').onclick=()=>{calDirty=false;$('appVer').textContent=APP_VER;$('tCal').value=S.cal;$('tPro').value=S.pro;$('tStart').value=S.start||DEF_START;const c=syncCfg();$('syUrl').value=c?c.url:'';$('syTok').value=c?c.token:'';setSyncTxt();open('setSheet')};
 $('syConnect').onclick=async()=>{const url=$('syUrl').value.trim(),token=$('syTok').value.trim();
  if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)){setSyncTxt('اللينك لازم يبدأ بـ https://script.google.com وينتهي بـ /exec');return}
  if(!token){$('syTok').focus();return}
@@ -761,7 +764,9 @@ $('syConnect').onclick=async()=>{const url=$('syUrl').value.trim(),token=$('syTo
 $('syNow').onclick=()=>syncNow({veil:true});
 $('syOff').onclick=()=>{localStorage.removeItem('syncCfg');lastSync=null;setSyncTxt()};
 let calDirty=false;$('tCal').addEventListener('input',()=>calDirty=true);
-$('saveSet').onclick=async()=>{const nc=+$('tCal').value||2800,man=calDirty&&nc!==S.cal;calDirty=false;S={...S,calAt:man?Date.now():(S.calAt||0),cal:man?nc:S.cal,pro:+$('tPro').value||145,start:$('tStart').value||DEF_START};await sset('settings',S);close('setSheet');renderToday()};
+$('saveSet').onclick=async()=>{const nc=+$('tCal').value||2800,man=calDirty&&nc!==S.cal;calDirty=false;
+ if(man){const t=new Date();t.setHours(0,0,0,0);adj.unshift({d:t.getTime(),at:Date.now(),from:S.cal,to:nc,manual:true});await sset('adjLog',adj)}
+ S={...S,cal:man?nc:S.cal,pro:+$('tPro').value||145,start:$('tStart').value||DEF_START};await sset('settings',S);close('setSheet');renderToday()};
 
 $('boredMore').onclick=()=>{bored.last=genOptions(bored.mi);renderBored();$('boredList').scrollTop=0};
 $('boredList').onclick=async e=>{const i=e.target.dataset.pick;if(i===undefined)return;const o=bored.opts[+i],mi=bored.mi,ch={type:o.type,name:o.name};
@@ -771,8 +776,9 @@ $('boredList').onclick=async e=>{const i=e.target.dataset.pick;if(i===undefined)
 // weight
 let adj=[];
 // آخر تعديل تلقائي هو الهدف، إلا لو انت غيّرت الهدف بإيدك بعده
-function applyAdj(){const a=adj.slice().sort((x,y)=>(y.at||y.d)-(x.at||x.d))[0];
- if(a&&(a.at||a.d)>(S.calAt||0)&&S.cal!==a.to){S.cal=a.to;S.lastAdj=Math.max(S.lastAdj||0,a.d);return true}return false}
+// مصدر واحد للهدف: آخر سطر في سجل التعديلات (تلقائي أو يدوي). مفيش أي إعداد تاني يقدر يغيّره
+const latestAdj=()=>adj.slice().sort((x,y)=>(y.at||y.d)-(x.at||x.d))[0];
+function applyAdj(){const a=latestAdj();if(a&&S.cal!==a.to){S.cal=a.to;return true}return false}
 const dstr=d=>new Date(d).toLocaleDateString('ar-EG',{day:'numeric',month:'long'});
 const sgn=n=>(n>=0?'+':'−')+ar(Math.abs(Math.round(n*100)/100));
 const lastAdjDate=()=>Math.max(S.lastAdj||0,...adj.map(a=>a.d||0),0);
@@ -789,11 +795,12 @@ async function evaluate(){const r=rateInfo();if(!r||r.short)return;const last=bw
  adj.unshift({d:last.d,at:Date.now(),from:S.cal,to:S.cal+delta,rate:r.rate});S.cal+=delta;S.lastAdj=last.d;
  await sset('settings',S);await sset('adjLog',adj)}
 function renderWeight(){
+ applyAdj();
  const last=bw[bw.length-1],r=rateInfo();
  $('wstats').innerHTML=`<div><b>${last?ar(last.w):'—'}</b><small>وزنك الحالي (كجم)</small></div>`+
   `<div><b>${bw.length>1?sgn(last.w-bw[0].w):'—'}</b><small>من أول وزن</small></div>`+
   `<div><b>${r&&!r.short?sgn(r.rate):'—'}</b><small>المعدل في الأسبوع</small></div>`+
-  `<div><b>${ar(S.cal)}</b><small>هدف السعرات دلوقتي</small></div>`;
+  `<div><b>${ar(S.cal)}</b><small>هدف السعرات دلوقتي${latestAdj()?(latestAdj().manual?' (يدوي)':' (تلقائي)'):''}</small></div>`;
  const st=$('wstatus');let cls='',html='';
  if(!bw.length)html='<b>ابدأ بوزنك النهارده</b>ده هيبقى نقطة البداية اللي هنقارن بيها.';
  else if(r&&r.short&&r.afterAdj)html='<b>الهدف اتعدّل قريب</b>هنستنى أسبوعين وزن من بعد آخر تعديل قبل ما نحكم تاني، عشان الجسم ياخد وقته.';else if(!r||r.short)html='<b>محتاج أسبوعين وزن</b>بعد أسبوعين من أول وزن هنقدر نحكم إذا كنت ماشي صح، ونظبط السعرات لو محتاجة.';
@@ -813,7 +820,7 @@ function renderWeight(){
   const ticks=[lo+0.5,(lo+hi)/2,hi-0.5].map(v=>`<line x1="34" x2="310" y1="${Y(v)}" y2="${Y(v)}" stroke="#3A5068" stroke-width="1"/><text x="28" y="${Y(v)+4}" text-anchor="end" fill="#93A4B6" font-size="10">${(Math.round(v*10)/10)}</text>`).join('');
   svg.innerHTML=ticks+`<polygon points="${band}" fill="rgba(92,200,168,.3)"/><polyline points="${pts}" fill="none" stroke="#EEF1F4" stroke-width="2.5" stroke-linejoin="round"/>`+bw.map(b=>`<circle cx="${X(b.d)}" cy="${Y(b.w)}" r="4" fill="#EEF1F4"/>`).join('');}
  $('bwList').innerHTML=bw.length?bw.map((b,i)=>({b,i})).reverse().map(({b,i})=>{const p=bw[i-1];return `<div class="row2"><span>${dstr(b.d)}</span><span>${ar(b.w)} كجم ${p?`<small>(${sgn(b.w-p.w)})</small>`:''}</span><button class="del" data-bw="${i}" aria-label="امسح">×</button></div>`}).join(''):'<p class="hint" style="margin:0">لسه مفيش أوزان.</p>';
- $('adjList').innerHTML=adj.length?adj.map(a=>`<div class="row2"><span>${dstr(a.d)}</span><span>${ar(a.from)} ← ${ar(a.to)} سعر</span></div>`).join(''):'<p class="hint" style="margin:0">مفيش تعديلات لسه. الهدف دلوقتي '+ar(S.cal)+' سعر.</p>';
+ $('adjList').innerHTML=adj.length?adj.slice().sort((x,y)=>(y.at||y.d)-(x.at||x.d)).map(a=>`<div class="row2"><span>${dstr(a.d)}${a.manual?' <small>(يدوي)</small>':''}</span><span>من ${ar(a.from)} إلى ${ar(a.to)} سعر</span></div>`).join(''):'<p class="hint" style="margin:0">مفيش تعديلات لسه. الهدف دلوقتي '+ar(S.cal)+' سعر.</p>';
 }
 $('saveBw').onclick=async()=>{const w=parseFloat($('bwIn').value);if(!w||w<30||w>250){$('bwIn').focus();return}
  const t=new Date();t.setHours(0,0,0,0);const d=t.getTime();
